@@ -1,0 +1,1 @@
+ASTra (AST translator) is a Kotlin library that helps with creating translators from ANTLR's ParseTree to Kotlin AST in rule-based manner. All AST is well and strictly typed, also support of source generating is planned.
