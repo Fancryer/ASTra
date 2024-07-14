@@ -1,0 +1,93 @@
+rule variable :: VariableContext -> KPrimaryExpression
+variable ctx = `ctx.Id().text.id`;
+
+rule flatType :: FlatContext -> KUserType
+flatType ctx = `KUserType(KSimpleUserType(ctx.Type().text.id,none()).nonEmptyList())`;
+
+rule true_constant :: Constant_trueContext -> EBooleanLiteral
+true_constant _ = `EBooleanLiteral.True`;
+
+rule false_constant :: Constant_falseContext -> EBooleanLiteral
+false_constant _ = `EBooleanLiteral.False`;
+
+funct termToType :: Token -> KType
+termToType t = `KUserType(KSimpleUserType(t.text.id,none()).nonEmptyList()).type`;
+
+rule funType :: FunContext -> KFunctionType
+funType ctx =
+	let i = `termToType(ctx.\`in\`)` in
+	let o = `termToType(ctx.\`out\`)` in
+    `KFunctionType(
+        none(),
+        KFunctionTypeParameters(
+            #{i}.nonEmptyList()
+        ),
+        #{o}
+    )`
+
+rule<FunContext,KFunctionType>("funType") {
+	from(FunContext::class)
+	how {ctx:FunContext->
+		val termToType={t:Token->
+			KUserType(
+				KSimpleUserType(t.text.id,none()).nonEmptyList()
+			).type
+		}
+		KFunctionType(
+			none(),
+			KFunctionTypeParameters(
+				termToType(ctx.`in`).nonEmptyList()
+			),
+			termToType(ctx.`out`)
+		)
+	}
+}
+
+rule("abstraction") {
+	from(AbstractionContext::class)
+	how {ctx:AbstractionContext->
+		TODO("ABOBA")
+//				val term=mapWithOrThrow<TermContext,KExpression>({it.how(ctx.term())}) {
+//					Exception("No expression for ${ctx.sourcify}")
+//				}
+//				val type=mapWithOrThrow<TypeContext,KTypeInner>({it.how(ctx.type())}) {
+//					Exception("No type for ${ctx.sourcify}")
+//				}
+//
+//				KLambdaLiteral(
+//					KLambdaParameters(
+//						nonEmptyListOf(
+//							KVariableDeclaration(
+//								emptyList(),
+//								ctx.Id().text.id,
+//								type.type.some()
+//							)
+//						)
+//					).some(),
+//					nonEmptyListOf(KStatement(emptyList(),term)).some()
+//				)
+	}
+}
+
+rule<ApplicationContext,KPostfixUnaryExpression>("application") {
+	from(ApplicationContext::class)
+	how {ctx->
+		val callee=mapWithOrThrow<TermContext,KPrimaryExpression>({it.how(ctx.term(0))}) {
+			Exception("No expression for ${ctx.sourcify}")
+		}
+		val arg=mapWithOrThrow<TermContext,KExpression>({it.how(ctx.term(1))}) {
+			Exception("No expression for ${ctx.sourcify}")
+		}
+		callee.call(arg.valueArg.nonEmptyList())
+	}
+}
+
+rule<ParenthesisContext,KParenthesizedExpression>("paren") {
+	from(ParenthesisContext::class)
+	how {ctx->
+		lookup<TermContext,KExpression>()?.how
+			?.let {it(ctx.term())}
+			?.paren
+		?: throw Exception("No expression for ${ctx.sourcify}")
+	}
+}

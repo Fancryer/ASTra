@@ -1,0 +1,133 @@
+expr :: ExpressionContext -> KExpression
+
+expr(exprs = []) =
+	match ctx.sourcify to
+	| "this" -> KThis
+	| "true" -> true.ast
+	| "false" -> false.ast
+
+expr(!INTEGER_LITERAL) =
+	INTEGER_LITERAL.text.toInt().ast
+
+expr(!identifier, !NEW) =
+	identifier().IDENTIFIER().text.id.call(KValueArguments(none()))
+
+expr(!identifier, ~NEW) =
+	ctx.sourcify.id
+
+expr(exprs = [e], !LPAREN) = paren e
+
+expr(exprs = [e], !BANG) =
+	KPrefixUnaryExpression(KExcl, expr e)
+
+expr(exprs = [e], !LBRACK) =
+	"Array".id
+		.call ![
+			(expr e).valueArg,
+			0.ast.stat.lambda#valueArg
+		]
+
+expr(exprs = [e], !DOT) =
+	(prim e).getProp("length".id)
+
+expr(exprs = [e1, e2], !LBRACK) =
+	KPostfixUnaryExpression(
+        prim e1,
+        [KIndexingSuffix ![prim e2]]
+    )
+
+expr(exprs = [e1, e2], ~DOT, ?AND, ?ADD, ?SUB, ?MUL, ?LT) =
+	left <- expr e1;
+	right <- expr e2;
+	when
+	| !AND -> KConjunction(left, right)
+	| !ADD -> KAdditiveExpression(left, KAdd, right)
+    | !SUB -> KAdditiveExpression(left, KSub, right)
+    | !MUL -> KMultiplicativeExpression(left, KMult, right)
+    | !LT -> KComparison(left, EComparisonOperator.Lt, right)
+
+expr(exprs = [e1, e2], ~DOT, !AND) = KConjunction(expr e1,expr e2)
+expr(exprs = [e1, e2], ~DOT, !ADD) = KAdditiveExpression(expr e1, KAdd, expr e2)
+expr(exprs = [e1, e2], ~DOT, !SUB) = KAdditiveExpression(expr e1, KSub, expr e2)
+expr(exprs = [e1, e2], ~DOT, !MUL) = KMultiplicativeExpression(expr e1, KMult,expr e2)
+expr(exprs = [e1, e2], ~DOT, !LT) = KComparison(expr e1, EComparisonOperator.Lt, expr e2)
+
+exprs len 2&&ctx.DOT()==null->
+	getHow()?.let {
+		val left=it(exprs[0])
+		val right=it(exprs[1])
+		when
+		{
+			ctx.AND()!=null->KConjunction(left,right)
+			ctx.ADD()!=null->KAdditiveExpression(left,KAdd,right)
+			ctx.SUB()!=null->KAdditiveExpression(left,KSub,right)
+			ctx.MUL()!=null->KMultiplicativeExpression(left,KMult,right)
+			else->KComparison(left,EComparisonOperator.Lt,right)
+		}
+	} ?: throw Exception("No expression")
+
+
+rule<ExpressionContext,KExpression> {
+	name("expr")
+	from(ExpressionContext::class)
+	how {ctx:ExpressionContext->
+		val text=Sourcifier().sourcify(ctx)
+		val exprs=ctx.expression()
+		val getHow={lookup<ExpressionContext,KExpression>()?.how}
+		when
+		{
+			exprs len 2&&ctx.LBRACK()!=null->
+				lookup<ExpressionContext,KPrimaryExpression>()
+					?.how
+					?.let {
+						KPostfixUnaryExpression(
+							it(exprs[0]),
+							KIndexingSuffix(it(exprs[1]).nonEmptyList()).list()
+						)
+					} ?: throw Exception("No expression")
+
+			exprs len 2&&ctx.DOT()==null->
+				getHow()?.let {
+					val left=it(exprs[0])
+					val right=it(exprs[1])
+					when
+					{
+						ctx.AND()!=null->KConjunction(left,right)
+						ctx.ADD()!=null->KAdditiveExpression(left,KAdd,right)
+						ctx.SUB()!=null->KAdditiveExpression(left,KSub,right)
+						ctx.MUL()!=null->KMultiplicativeExpression(left,KMult,right)
+						else->KComparison(left,EComparisonOperator.Lt,right)
+					}
+				} ?: throw Exception("No expression")
+
+			else->
+				lookup<ExpressionContext,KPrimaryExpression>()
+					?.how
+					?.let {
+						val callee=it(exprs[0])
+						val how=getHow() ?: throw Exception("No expression")
+						val id=ctx.identifier()
+							.IDENTIFIER()
+							.text
+							.id
+						KPostfixUnaryExpression(
+							callee,
+							listOf(
+								KNavigationSuffix(KDot,id),
+								KCallSuffix(
+									none(),
+									KValueArguments(
+										ctx.expression()
+											.drop(1)
+											.map(how)
+											.map {it.valueArg}
+											.toNonEmptyListOrNone()
+									)
+								)
+							)
+						)
+						1.ast
+					} ?: throw Exception("No expression")
+		}
+	}
+}
