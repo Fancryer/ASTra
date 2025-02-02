@@ -1,7 +1,6 @@
 import ast.RuleHolder
 import ast.RuleVisitor
-import org.antlr.v4.runtime.CharStreams
-import org.antlr.v4.runtime.CommonTokenStream
+import org.antlr.v4.runtime.*
 import org.fancryer.bf.*
 import org.fancryer.bf.ast.*
 import org.fancryer.bf.examples.stlcRuleHolder
@@ -18,7 +17,9 @@ class StlcTest
 	@Test
 	fun testVariable()
 	{
-		assertEquals("x",tryT(holder,"x").code)
+		assertEquals("x",holder.tryT("x").code.also {
+			println("x: $it")
+		})
 	}
 
 	// The identity function for booleans.
@@ -26,7 +27,9 @@ class StlcTest
 	fun testIdentity()
 	{
 		val idF="\\x:Bool, x"
-		assertEquals("{x: Boolean -> x;}",tryT(holder,idF).code)
+		assertEquals("{x: Boolean -> x;}",holder.tryT(idF).code.also {
+			println("idF: $it")
+		})
 	}
 
 	// The identity function for booleans, applied to the boolean true.
@@ -34,7 +37,9 @@ class StlcTest
 	fun testIdentityAppliedToTrue()
 	{
 		val idTrueF="(\\x:Bool, x) true"
-		assertEquals("(({x: Boolean -> x;}))(true)",tryT(holder,idTrueF).code)
+		assertEquals("(({x: Boolean -> x;}))(true)",holder.tryT(idTrueF).code.also {
+			println("idTrueF: $it")
+		})
 	}
 
 	// The boolean "not" function.
@@ -42,7 +47,9 @@ class StlcTest
 	fun testNot()
 	{
 		val notF="\\x:Bool, if x then false else true"
-		assertEquals("{x: Boolean -> if (x) {false;}{true;};}",tryT(holder,notF).code)
+		assertEquals("{x: Boolean -> if (x) {false;}{true;};}",holder.tryT(notF).code.also {
+			println("notF: $it")
+		})
 	}
 
 	// The constant function that takes every (boolean) argument to true.
@@ -50,7 +57,9 @@ class StlcTest
 	fun testTrue()
 	{
 		val trueF="\\x:Bool, true"
-		assertEquals("{x: Boolean -> true;}",tryT(holder,trueF).code)
+		assertEquals("{x: Boolean -> true;}",holder.tryT(trueF).code.also {
+			println("trueF: $it")
+		})
 	}
 
 	// A two-argument function that takes two booleans and returns the first one.
@@ -60,7 +69,9 @@ class StlcTest
 	fun testFirst()
 	{
 		val firstF="\\x:Bool, \\y:Bool, x"
-		assertEquals("{x: Boolean -> {y: Boolean -> x;};}",tryT(holder,firstF).code)
+		assertEquals("{x: Boolean -> {y: Boolean -> x;};}",holder.tryT(firstF).code.also {
+			println("firstF: $it")
+		})
 	}
 
 	// A two-argument function that takes two booleans and returns the first one, applied to the booleans false and true.
@@ -70,7 +81,12 @@ class StlcTest
 	fun testFirstFalseTrue()
 	{
 		val firstFalseTrueF="(\\x:Bool, \\y:Bool, x) false true"
-		assertEquals("((({x: Boolean -> {y: Boolean -> x;};}))(false))(true)",tryT(holder,firstFalseTrueF).code)
+		assertEquals(
+			"((({x: Boolean -> {y: Boolean -> x;};}))(false))(true)",
+			holder.tryT(firstFalseTrueF)
+				.code
+				.also {println("firstFalseTrueF: $it")}
+		)
 	}
 
 	// A higher-order function that takes a function f (from booleans to booleans) as an argument,
@@ -79,7 +95,12 @@ class StlcTest
 	fun testFF()
 	{
 		val ffF="\\f:Bool -> Bool, f (f true)"
-		assertEquals("{f: ( Bool) ->  Boolean -> (f)(((f)(true)));}",tryT(holder,ffF).code)
+		assertEquals(
+			"{f: ( Boolean) ->  Boolean -> (f)(((f)(true)));}",
+			holder.tryT(ffF)
+				.code
+				.also {println("ffF: $it")}
+		)
 	}
 
 	// The same higher-order function, applied to the constantly false function.
@@ -87,17 +108,14 @@ class StlcTest
 	fun testFFFalse()
 	{
 		val ffFalseF="(\\f:Bool -> Bool, f (f true)) (\\x:Bool, false)"
-		assertEquals("(({f: ( Bool) ->  Boolean -> (f)(((f)(true)));}))(({x: Boolean -> false;}))",tryT(holder,ffFalseF).code)
+		assertEquals("(({f: ( Boolean) ->  Boolean -> (f)(((f)(true)));}))(({x: Boolean -> false;}))",holder.tryT(ffFalseF).code
+			.also {
+				println("ffFalseF: $it")
+			})
 	}
 
-	fun tryT(holder:RuleHolder,src:String):KotlinAst=
-		src pipe
-				CharStreams::fromString pipe
-				::StlcLexer pipe
-				::CommonTokenStream pipe
-				::StlcParser pipe
-				StlcParser::t pipe
-				RuleVisitor(holder)::visit1
+	fun RuleHolder<StlcLexer,StlcParser>.tryT(src:String):KotlinAst=
+		transpile(src,::StlcLexer,::StlcParser,StlcParser::t)
 
 	companion object
 	{

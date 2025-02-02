@@ -2,8 +2,12 @@ package ast
 
 import org.antlr.v4.runtime.tree.ParseTree
 import org.fancryer.bf.ast.KotlinAst
+import org.fancryer.bf.ast.err
+import org.fancryer.bf.ast.rules.RuleLogger
+import org.fancryer.bf.ast.rules.RuleLoggerImpl
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.ExperimentalReflectionOnLambdas
+import kotlin.reflect.jvm.reflect
 
 //@OptIn(ExperimentalReflectionOnLambdas::class)
 //open class TranspilationRule<F:ParseTree,N:KotlinAst>(
@@ -19,19 +23,20 @@ import kotlin.reflect.jvm.ExperimentalReflectionOnLambdas
 //}
 
 @OptIn(ExperimentalReflectionOnLambdas::class)
-class TranspilationRule<F:ParseTree,N:KotlinAst>(
-	val from:KClass<F>,
-	how:(F)->N,
+class TranspilationRule<P:ParseTree,A:KotlinAst>(
+	val from:KClass<P>,
+	how:(P)->A,
 	val name:String,
 	@Suppress("UNCHECKED_CAST")
-	val nodeClass:(KClass<N>?)=null, //how.reflect()?.returnType?.classifier as? KClass<N>,
-	val demands:Requirements<F>,
-	val ensures:Requirements<N>
-):(F)->N
+//	val nodeClass:(KClass<A>?)=how.reflect()?.returnType?.classifier as? KClass<A>,
+	val demands:Requirements<P>,
+	val ensures:Requirements<A>,
+	val logger:(RuleLogger<P,A>)=RuleLoggerImpl()
+):(P)->A
 {
 	val how=how.wrapHow(demands,ensures)
 
-	override fun invoke(f:F)=how(f)
+	override fun invoke(f:P)=how(f)
 
 	override fun toString()=
 		"TranspilationRule($name ${from.simpleName} -> \${nodeClass.simpleName} $demands $ensures)"
@@ -42,9 +47,9 @@ class TranspilationRule<F:ParseTree,N:KotlinAst>(
 			demands:Requirements<F>,
 			ensures:Requirements<N>
 		)={f:F->
-			if(!demands.all {it(f)}) throw Exception("Demand contract violated")
+			if(!demands.all {it(f)}) "Demand contract violated".err
 			this(f).let {ret->
-				if(!ensures.all {it(ret)}) throw Exception("Ensures contract violated")
+				if(!ensures.all {it(ret)}) "Ensures contract violated".err
 				ret
 			}
 		}

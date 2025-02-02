@@ -1,4 +1,4 @@
-//import arrow.core.nonEmptyListOf
+//import arrow.core.nel()Of
 //import arrow.core.none
 //import arrow.core.some
 //import org.fancryer.bf.*
@@ -15,7 +15,7 @@
 //			identifier=KIdentifierInner("main"),
 //			functionValueParameters=KFunctionValueParameters(none()),
 //			functionBody=KBlock(
-//				nonEmptyListOf(
+//				nel()Of(
 //					KStatement(
 //						emptyList(),
 //						KPostfixUnaryExpression(
@@ -24,7 +24,7 @@
 //								KCallSuffix(
 //									none(),
 //									KValueArguments(
-//										nonEmptyListOf(
+//										nel()Of(
 //											KValueArgument(
 //												none(),
 //												none(),
@@ -51,7 +51,7 @@
 //						KCallSuffix(
 //							none(),
 //							KValueArguments(
-//								nonEmptyListOf(
+//								nel()Of(
 //									KValueArgument(
 //										none(),
 //										none(),

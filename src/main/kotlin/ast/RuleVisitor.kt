@@ -1,5 +1,7 @@
 package ast
 
+import org.antlr.v4.runtime.Lexer
+import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
 import org.fancryer.bf.Distance
 import org.fancryer.bf.Distance.UnrealDistance.rd
@@ -19,23 +21,23 @@ inline fun <reified T:ParseTree,R:KotlinAst,T1:ParseTree> Collection<Transpilati
 	return newList
 }
 
-class RuleVisitor(val holder:RuleHolder)
+class RuleVisitor<LT:Lexer,PT:Parser>(val holder:RuleHolder<LT,PT>)
 {
-	inline fun <reified P:ParseTree> visit1(tree:P):KotlinAst=
-		//check if tree is null
-		tree.let {t->
-			//get holder rules
-			holder.rules
-				//find rule that gets non-null tree of `from` class
-				//if found then convert ot with `how` function, else null
-				.firstOrNull {
-					t::class.isSuperclassOf(it.from)
-				}
-				?.let {
-					@Suppress("TYPE_MISMATCH")
-					it.how(t)
-				}
-		} ?: holder.defaultRule.how(tree)
+	//	inline fun <reified P:ParseTree> visit1(tree:P):KotlinAst=
+	//		//check if tree is null
+	//		tree.let {t->
+	//			//get holder rules
+	//			holder.rules
+	//				//find rule that gets non-null tree of `from` class
+	//				//if found then convert ot with `how` function, else null
+	//				.firstOrNull {
+	//					t::class.isSuperclassOf(it.from)
+	//				}
+	//				?.let {
+	//					@Suppress("TYPE_MISMATCH")
+	//					it.how( t)
+	//				}
+	//		} ?: holder.defaultRule.how(tree)
 
 	inline fun <reified P:ParseTree> visit(tree:P):KotlinAst
 	{
@@ -56,9 +58,15 @@ class RuleVisitor(val holder:RuleHolder)
 		//get holder rules
 		return rulesWithDistanceToFrom.firstOrNull()
 				   //if found then convert ot with `how` function, else null
-				   ?.let {
-					   //@Suppress("TYPE_MISMATCH")
-					   it.how(t)
+				   ?.let {rule->
+					   @Suppress("TYPE_MISMATCH")
+					   if(holder.logger.useBefore(t)) holder.logger.before(t)
+					   rule.logger.before(t)
+					   rule.how(t).also {
+						   rule.logger.after(it)
+						   @Suppress("TYPE_MISMATCH")
+						   if(holder.logger.useAfter(it)) holder.logger.after(it)
+					   }
 				   } ?: holder.defaultRule.how(tree)
 	}
 }

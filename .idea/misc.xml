@@ -103,6 +103,26 @@
           <option name="language" value="" />
           <option name="generateVisitor" value="true" />
         </PerGrammarGenerationSettings>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/src/main/resources/Lox.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="A:\Downloads\KAST\src\main\java" />
+          <option name="libDir" value="" />
+          <option name="encoding" value="" />
+          <option name="pkg" value="lox" />
+          <option name="language" value="" />
+          <option name="generateListener" value="false" />
+        </PerGrammarGenerationSettings>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/src/main/resources/Lisp.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="A:\Downloads\KAST\src\main\java\lisp" />
+          <option name="libDir" value="A:\Downloads\KAST\src\main\java\lisp" />
+          <option name="encoding" value="" />
+          <option name="pkg" value="gen" />
+          <option name="language" value="" />
+          <option name="generateListener" value="false" />
+        </PerGrammarGenerationSettings>
       </list>
     </option>
   </component>

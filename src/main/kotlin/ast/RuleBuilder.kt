@@ -2,8 +2,14 @@ package ast
 
 import arrow.core.*
 import org.antlr.v4.runtime.tree.ParseTree
+import org.fancryer.bf.ast.KLambdaLiteral
 import org.fancryer.bf.ast.KotlinAst
+import org.fancryer.bf.ast.err
+import org.fancryer.bf.ast.errf
+import org.fancryer.bf.ast.rules.RuleLogger
+import org.fancryer.bf.ast.rules.RuleLoggerImpl
 import org.fancryer.bf.fix
+import stlc.gen.StlcParser.AbstractionContext
 import kotlin.reflect.KClass
 
 class RuleBuilder<F:ParseTree,N:KotlinAst>
@@ -13,6 +19,7 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 	private var name:(Option<String>)=none()
 	private var demands:(List<(F)->Boolean>)=emptyList()
 	private var ensures:(List<(N)->Boolean>)=emptyList()
+	private var logger:(RuleLogger<F,N>)=RuleLoggerImpl()
 
 	fun from(init:()->KClass<F>)
 	{
@@ -27,6 +34,12 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 	fun how(init:(F)->N)
 	{
 		how=init.some()
+	}
+
+	fun howCtx(init:F.()->N):Unit=how {
+		init.run {
+			this(it)
+		}
 	}
 
 	fun howFixed(init:((F)->N)->(F)->N)
@@ -49,17 +62,21 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 		ensures+=init
 	}
 
+	fun logger(constructor:()->RuleLogger<F,N>,init:RuleLogger<F,N>.()->Unit)=
+		constructor().also(init)
+
 	fun build():TranspilationRule<F,N>
 	{
-		val from=from.getOrNull() ?: throw Exception("from is not set")
-		val how=how.getOrNull() ?: throw Exception("how is not set")
-		val name=name.getOrNull() ?: throw Exception("name is not set")
+		val from=from.getOrNull() ?: "from is not set".err
+		val how=how.getOrNull() ?: "how is not set".err
+		val name=name.getOrNull() ?: "name is not set".err
 		return TranspilationRule(
 			from,
 			how,
 			name,
 			demands=demands,
-			ensures=ensures
+			ensures=ensures,
+			logger=logger
 		)
 	}
 }

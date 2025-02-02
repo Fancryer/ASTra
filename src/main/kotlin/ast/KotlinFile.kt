@@ -1,15 +1,10 @@
 package org.fancryer.bf.ast
 
 import arrow.core.*
-import org.fancryer.bf.nonEmptyList
+import org.fancryer.bf.list
 
-data class KKotlinFile(
-	val shebang:(Option<String>)=none(),
-	val annotations:(List<KFileAnnotation>)=emptyList(),
-	val packageHeader:KPackageHeader,
-	val importList:(List<KImportHeader>)=emptyList(),
-	val topLevelObjectList:(List<KTopLevelObject>)=emptyList()
-):KotlinAst
+val String.errf get()={this.err}
+val String.err:Nothing get()=error(this)
 
 data class KKotlinScript(
 	val shebang:Option<String>,
@@ -31,7 +26,12 @@ data class KUserType(
 		get()=types.joinToString(".") {it.code}
 }
 
-data class KPackageHeader(val identifier:Option<KIdentifier>):KotlinAst
+data class KPackageHeader(
+	val identifier:(Option<KIdentifier>)=None
+):KotlinAst
+{
+	override val code:String=identifier.fold({""}) {it.code}
+}
 
 sealed interface KImportHeader:KotlinAst
 {
@@ -41,6 +41,9 @@ sealed interface KImportHeader:KotlinAst
 }
 
 data class KTopLevelObject(val declaration:KDeclaration):KotlinAst
+{
+	override val code:String=declaration.code
+}
 
 data class KTypeAlias(
 	val modifiers:List<KModifier>,
@@ -160,26 +163,43 @@ data class KCompanionObject(
 
 data class KAnonymousInitializer(val block:KBlock):KClassMemberDeclaration
 
-data class KFunctionValueParameters(val params:Option<NonEmptyList<KFunctionValueParameter>>):KotlinAst
+data class KFunctionValueParameters(
+	val params:(Option<NonEmptyList<KFunctionValueParameter>>)=None
+):KotlinAst
+{
+	override val code:String=
+		"(${
+			params.fold({""}) {p->
+				p.joinToString {it.code}
+			}
+		})"
+}
 
 data class KFunctionValueParameter(
-	val modifiers:Option<KParameterModifiers>,
+	val modifiers:(Option<KParameterModifiers>)=None,
 	val parameter:KParameter,
-	val expression:Option<KExpression>
+	val expression:(Option<KExpression>)=None
 ):KotlinAst
+{
+	override val code:String=buildString {
+		modifiers.onSome {append(it.code).append(' ')}
+		append(parameter.code)
+		expression.onSome {append(" = ").append(it.code)}
+	}
+}
 
 data class KSecondaryConstructor(
-	val modifiers:Option<KModifiers>,
+	val modifiers:(Option<KModifiers>)=None,
 	val functionValueParameters:KFunctionValueParameters,
-	val constructorDelegationCall:Option<KConstructorDelegationCall>,
+	val constructorDelegationCall:(Option<KConstructorDelegationCall>)=None,
 	val block:KBlock
 ):KClassMemberDeclaration
 
 data class KObjectDeclaration(
-	val modifiers:Option<KModifiers>,
+	val modifiers:(Option<KModifiers>)=None,
 	val identifier:KSimpleIdentifier,
-	val delegationSpecifiers:Option<KDelegationSpecifiers>,
-	val classBody:Option<KClassBody>
+	val delegationSpecifiers:(Option<KDelegationSpecifiers>)=None,
+	val classBody:(Option<KClassBody>)=None
 ):KDeclaration
 
 //robjectDeclaration: modifiers?
@@ -188,27 +208,40 @@ data class KObjectDeclaration(
 //      rclassBody?;
 
 data class KFunctionDeclaration(
-	val modifiers:(Option<KModifiers>)=none(),
-	val typeParameters:(Option<KTypeParameters>)=none(),
-	val receiverType:(Option<KType>)=none(),
+	val modifiers:(Option<KModifiers>)=None,
+	val typeParameters:(Option<KTypeParameters>)=None,
+	val receiverType:(Option<KType>)=None,
 	val identifier:KSimpleIdentifier,
 	val functionValueParameters:KFunctionValueParameters,
-	val type:(Option<KType>)=none(),
-	val typeConstraints:(Option<KTypeConstraints>)=none(),
-	val functionBody:(Option<KFunctionBody>)=none()
+	val type:(Option<KType>)=None,
+	val typeConstraints:(Option<KTypeConstraints>)=None,
+	val functionBody:(Option<KFunctionBody>)=None
 ):KDeclaration
+{
+	override val code:String=buildString {
+		modifiers.onSome {append(it.code).append(' ')}
+		append("fun ")
+		typeParameters.onSome {append(it.code).append(' ')}
+		receiverType.onSome {append(it.code).append('.')}
+		append(identifier.code)
+		append(functionValueParameters.code)
+		type.onSome {append(": ").append(it.code).append(' ')}
+		typeConstraints.onSome {append(it.code)}
+		functionBody.onSome {append(it.code)}
+	}
+}
 
 class FunctionDeclarationBuilder(private var identifier:KSimpleIdentifier)
 {
-	private var modifiers:(Option<KModifiers>)=none()
-	private var typeParameters:(Option<KTypeParameters>)=none()
-	private var receiverType:(Option<KType>)=none()
+	private var modifiers:(Option<KModifiers>)=None
+	private var typeParameters:(Option<KTypeParameters>)=None
+	private var receiverType:(Option<KType>)=None
 
 	//Check
 	private var functionValueParameters:KFunctionValueParameters=KFunctionValueParameters(none())
-	private var type:(Option<KType>)=none()
-	private var typeConstraints:(Option<KTypeConstraints>)=none()
-	private var functionBody:(Option<KFunctionBody>)=none()
+	private var type:(Option<KType>)=None
+	private var typeConstraints:(Option<KTypeConstraints>)=None
+	private var functionBody:(Option<KFunctionBody>)=None
 
 	fun modifiers(init:KModifiersBuilder.()->Unit)
 	{
@@ -293,13 +326,13 @@ class KModifiersBuilder
 @ClassBuilderDsl
 class ClassDeclarationBuilder(private val identifier:KSimpleIdentifier)
 {
-	private var modifiers:(Option<KModifiers>)=none()
-	private var classHeaderType:(Option<KClassHeaderType>)=none()
-	private var typeParameters:(Option<KTypeParameters>)=none()
-	private var primaryConstructor:(Option<KPrimaryConstructor>)=none()
-	private var delegationSpecifiers:(Option<KDelegationSpecifiers>)=none()
-	private var typeConstraints:(Option<KTypeConstraints>)=none()
-	private var classBody:(Option<KClassBody>)=none()
+	private var modifiers:(Option<KModifiers>)=None
+	private var classHeaderType:(Option<KClassHeaderType>)=None
+	private var typeParameters:(Option<KTypeParameters>)=None
+	private var primaryConstructor:(Option<KPrimaryConstructor>)=None
+	private var delegationSpecifiers:(Option<KDelegationSpecifiers>)=None
+	private var typeConstraints:(Option<KTypeConstraints>)=None
+	private var classBody:(Option<KClassBody>)=None
 
 	fun headerType(type:KClassHeaderType)
 	{
@@ -323,31 +356,21 @@ class ClassDeclarationBuilder(private val identifier:KSimpleIdentifier)
 ):KDeclaration
 	*/
 
-	fun build():KClassDeclaration
-	{
-		return when(val classHeaderType=this.classHeaderType)
-		{
-			is None->throw Exception("classHeaderType must be defined")
-			is Some->
-				when(val classBody=this.classBody)
-				{
-					is None->throw Exception("classBody must be defined")
-					is Some->
-					{
-						KClassDeclaration(
-							modifiers,
-							classHeaderType.value,
-							identifier,
-							typeParameters,
-							primaryConstructor,
-							delegationSpecifiers,
-							typeConstraints,
-							classBody.value
-						)
-					}
-				}
+	fun build():KClassDeclaration=
+		classHeaderType.fold("classHeaderType must be defined".errf) {headerType->
+			classBody.fold("classBody must be defined".errf) {
+				KClassDeclaration(
+					modifiers,
+					headerType,
+					identifier,
+					typeParameters,
+					primaryConstructor,
+					delegationSpecifiers,
+					typeConstraints,
+					it
+				)
+			}
 		}
-	}
 }
 
 fun klass(id:KSimpleIdentifier,init:ClassDeclarationBuilder.()->Unit)=
@@ -362,9 +385,9 @@ data class KFunctionAssignExpression(val expression:KExpression):KFunctionBody
 }
 
 data class KVariableDeclaration(
-	val annotations:List<KAnnotation>,
+	val annotations:(List<KAnnotation>)=emptyList(),
 	val identifier:KSimpleIdentifier,
-	val type:Option<KType>
+	val type:(Option<KType>)=None
 ):KMultiOrSingleVariableDeclaration,KLambdaParameter
 {
 	override val code:String
@@ -382,7 +405,7 @@ data class KVariableDeclaration(
 }
 
 val KVariableDeclaration.lambdaParams:KLambdaParameters
-	get()=KLambdaParameters(nonEmptyList)
+	get()=KLambdaParameters(nel())
 
 data class KMultiVariableDeclaration(
 	val variableDeclarations:NonEmptyList<KVariableDeclaration>
@@ -390,16 +413,56 @@ data class KMultiVariableDeclaration(
 
 sealed interface KMultiOrSingleVariableDeclaration:KotlinAst
 data class KPropertyDeclaration(
-	val modifiers:Option<KModifiers>,
-	val isVal:Boolean,
-	val typeParameters:Option<KTypeParameters>,
+	val modifiers:(Option<KModifiers>)=None,
+	val isVal:Boolean=true,
+	val typeParameters:(Option<KTypeParameters>)=None,
+	val recieverType:(Option<KRecieverType>)=None,
 	val declaration:KMultiOrSingleVariableDeclaration,
-	val typeConstraints:Option<KTypeConstraints>,
-	val byDelegate:Boolean, // by expr
+	val typeConstraints:(Option<KTypeConstraints>)=None,
+	val byDelegate:Boolean=false, // by expr
 	val expr:KExpression,
-	val getter:Option<KGetter>,
-	val setter:Option<KSetter>
+	val getter:(Option<KGetter>)=None,
+	val setter:(Option<KSetter>)=None
 ):KDeclaration
+{
+	override val code:String=buildString {
+		modifiers.onSome {append(it).append(' ')}
+		append(if(isVal) "val " else "var ")
+		typeParameters.onSome {append(it).append(' ')}
+		recieverType.onSome {append(it).append('.')}
+		append(declaration.code).append(' ')
+		typeConstraints.onSome {append(it).append(' ')}
+		append(if(byDelegate) "by " else "= ")
+		append(expr.code)
+		getter.onSome {append(it).append(' ')}
+		setter.onSome {append(it)}
+	}
+
+	companion object
+	{
+		fun KMultiOrSingleVariableDeclaration.property(
+			expr:KExpression,
+			modifiers:(Option<KModifiers>)=None,
+			isVal:Boolean=true,
+			typeParameters:(Option<KTypeParameters>)=None,
+			typeConstraints:(Option<KTypeConstraints>)=None,
+			byDelegate:Boolean=false, // by expr
+			getter:(Option<KGetter>)=None,
+			setter:(Option<KSetter>)=None
+		):KPropertyDeclaration=
+			KPropertyDeclaration(
+				declaration=this,
+				expr=expr,
+				modifiers=modifiers,
+				isVal=isVal,
+				typeParameters=typeParameters,
+				typeConstraints=typeConstraints,
+				byDelegate=byDelegate,
+				getter=getter,
+				setter=setter
+			)
+	}
+}
 
 data class KGetter(
 	val modifiers:Option<KModifiers>,
@@ -475,6 +538,9 @@ data class KParameter(
 	val identifier:KSimpleIdentifier,
 	val type:KType
 ):KFunctionTypeParameterInner
+{
+	override val code:String="${identifier.code} : ${type.code}"
+}
 
 data class KConstructorDelegationCall(
 	val delegationQualifier:EConstructorDelegationQualifier,
@@ -516,7 +582,7 @@ data class KType(
 		}
 }
 
-val KType.functionTypeParameters get()=KFunctionTypeParameters(nonEmptyList)
+val KType.functionTypeParameters get()=KFunctionTypeParameters(nel())
 
 sealed interface KTypeInner:KotlinAst
 
@@ -624,7 +690,7 @@ data class KBlock(val statements:Option<NonEmptyList<KStatement>>):KControlStruc
 
 class BlockBuilder
 {
-	private var statements:(Option<NonEmptyList<KStatement>>)=none()
+	private var statements:(Option<NonEmptyList<KStatement>>)=None
 
 	operator fun KStatement.unaryPlus()
 	{
@@ -636,19 +702,9 @@ class BlockBuilder
 		+KStatement(emptyList(),this)
 	}
 
-	private fun stats(default:KStatement)=
-		when(val stats=statements)
-		{
-			is None->
-			{
-				nonEmptyListOf(default).also {statements=it.some()}
-			}
-
-			is Some->
-			{
-				(stats.value+default).also {statements=it.some()}
-			}
-		}
+	private fun stats(default:KStatement):(NonEmptyList<KStatement>)=
+		statements.fold({default.nel()}) {it+default}
+			.also {statements=it.some()}
 
 	fun build()=KBlock(statements)
 }
@@ -769,9 +825,21 @@ enum class ERangeOperator:KotlinAst
 
 data class KRangeExpression(val left:KExpression,val op:ERangeOperator,val right:KExpression):KExpression
 
-data class KAdditiveExpression(val left:KExpression,val op:KAdditiveOperator,val right:KExpression):KExpression
+data class KAdditiveExpression(
+	val left:KExpression,
+	val op:KAdditiveOperator,
+	val right:KExpression
+):KExpression
+{
+	override val code:String=
+		"${left.code} ${op.code} ${right.code}"
+}
 
 data class KMultiplicativeExpression(val left:KExpression,val op:KMultiplicativeOperator,val right:KExpression):KExpression
+{
+	override val code:String=
+		"${left.code} ${op.code} ${right.code}"
+}
 
 data class KAsExpression(val left:KExpression,val op:EAsOperator,val type:KType):KExpression
 
@@ -791,6 +859,15 @@ data class KPostfixUnaryExpression(
 				.map {it.code}
 				.forEach(::append)
 		}
+
+	companion object
+	{
+		infix fun KPrimaryExpression.nav(suffix:KNavigationSuffix):KPostfixUnaryExpression=
+			KPostfixUnaryExpression(this,suffix.list)
+
+		infix fun KPostfixUnaryExpression.suffix(suffix:KPostfixUnarySuffix):KPostfixUnaryExpression=
+			KPostfixUnaryExpression(primaryExpression,suffixes+suffix)
+	}
 }
 
 sealed interface KPostfixUnarySuffix:KotlinAst
@@ -816,6 +893,12 @@ data class KNavigationSuffix(
 	val memberAccessOperator:KMemberAccessOperator,
 	val suffix:KNavigationSuffixInner
 ):KAssignableSuffix,KPostfixUnarySuffix
+{
+	override val code:String=buildString {
+		append(memberAccessOperator.code)
+		append(suffix.code)
+	}
+}
 
 sealed interface KNavigationSuffixInner:KotlinAst
 
@@ -833,7 +916,10 @@ data class KParenthesizedExpression(val expression:KExpression):KPrimaryExpressi
 	override val code:String get()="(${expression.code})"
 }
 
-data class KCallSuffix(val args:Option<KTypeArguments>,val callSuffixInner:KCallSuffixInner):KPostfixUnarySuffix
+data class KCallSuffix(
+	val args:(Option<KTypeArguments>)=None,
+	val callSuffixInner:KCallSuffixInner
+):KPostfixUnarySuffix
 {
 	override val code:String
 		get()=buildString {
@@ -846,23 +932,43 @@ sealed interface KCallSuffixInner:KotlinAst
 
 data class KAnnotatedLambdaWithValueArguments(val valueArguments:Option<KValueArguments>,val lambda:KAnnotatedLambda):KCallSuffixInner
 
-data class KAnnotatedLambda(val annos:List<KAnnotation>,val label:Option<KLabel>,val literal:KLambdaLiteral):KotlinAst
-
-data class KTypeArguments(val projections:NonEmptyList<KTypeProjection>):KAssignableSuffix,KPostfixUnarySuffix
 data class KValueArguments(val args:Option<NonEmptyList<KValueArgument>>):KCallSuffixInner
 {
 	override val code:String
 		get()=buildString {
-			append('(')
-			args.onSome {arguments->
-				arguments.toList()
-					.asSequence()
-					.map {it.code}
-					.forEach(::append)
+			args.fold({append("()")}) {arguments->
+				val last=arguments.last()
+				val preLast=arguments.dropLast(1)
+				when(last.expression)
+				{
+					is KLambdaLiteral->
+					{
+						when(arguments.size)
+						{
+							1->append(last.code)
+							else->
+							{
+								append('(')
+								preLast.joinTo(this) {it.code}.forEach(::append)
+								append(')')
+								append(last.code)
+							}
+						}
+					}
+
+					else->
+					{
+						append('(')
+						arguments.toList().joinTo(this) {it.code}
+						append(')')
+					}
+				}
 			}
-			append(')')
 		}
 }
+
+data class KAnnotatedLambda(val annos:List<KAnnotation>,val label:Option<KLabel>,val literal:KLambdaLiteral):KotlinAst
+data class KTypeArguments(val projections:NonEmptyList<KTypeProjection>):KAssignableSuffix,KPostfixUnarySuffix
 
 data class KValueArgument(
 	val anno:(Option<KAnnotation>)=None,
@@ -886,19 +992,17 @@ data class KCollectionLiteral(val exprs:Option<NonEmptyList<KExpression>>):KPrim
 
 sealed interface KLiteralConstant:KPrimaryExpression
 
-enum class EBooleanLiteral:KLiteralConstant
+enum class EBooleanLiteral(override val code:String):KLiteralConstant
 {
-	True
-	{
-		override val code:String get()="true"
-	},
-	False
-	{
-		override val code:String get()="false"
-	}
+	True("true"),
+	False("false")
 }
 
 data class KIntegerLiteral(val value:Int):KLiteralConstant,KIntegerHexBin
+{
+	override val code:String=value.toString()
+}
+
 data class KHexLiteral(val value:Int):KLiteralConstant,KIntegerHexBin
 data class KBinLiteral(val value:Int):KLiteralConstant,KIntegerHexBin
 data class KCharacterLiteral(val value:Char):KLiteralConstant
@@ -972,8 +1076,8 @@ data class KMultiLineStrRef(val ref:KFieldIdentifier):KMultiLineStringContent
 data class KMultiLineStringExpression(val expression:KExpression):KMultiLineStringLiteralInner
 
 data class KLambdaLiteral(
-	val params:Option<KLambdaParameters>,
-	val stats:Option<NonEmptyList<KStatement>>
+	val params:(Option<KLambdaParameters>)=None,
+	val stats:(Option<NonEmptyList<KStatement>>)=None
 ):KFunctionLiteral
 {
 	override val code:String
@@ -984,10 +1088,13 @@ data class KLambdaLiteral(
 				append(" -> ")
 			}
 			stats.onSome {stats->
-				stats.forEach {
-					append(it.code)
-					append(';')
-				}
+				if(stats.size==1)
+					append(stats.first().code)
+				else
+					stats.forEach {
+						append(it.code)
+						append(';')
+					}
 			}
 			append("}")
 		}
@@ -1003,7 +1110,7 @@ infix fun KLambdaParameters.literal(stats:NonEmptyList<KStatement>):KLambdaLiter
 	KLambdaLiteral(some(),stats.some())
 
 infix fun KLambdaParameters.literal(stat:KStatement):KLambdaLiteral=
-	literal(stat.nonEmptyList)
+	literal(stat.nel())
 
 val KLambdaParameters.literal:KLambdaLiteral
 	get()=KLambdaLiteral(some(),none())
@@ -1185,6 +1292,18 @@ enum class EEqualityOperator:KotlinAst
 	EqEqEq
 }
 
+infix fun KExpression.exclEq(expr:KExpression):KEquality=
+	KEquality(this,EEqualityOperator.ExclEq,expr)
+
+infix fun KExpression.exclEqEq(expr:KExpression):KEquality=
+	KEquality(this,EEqualityOperator.ExclEqEq,expr)
+
+infix fun KExpression.eqEq(expr:KExpression):KEquality=
+	KEquality(this,EEqualityOperator.EqEq,expr)
+
+infix fun KExpression.eqEqEq(expr:KExpression):KEquality=
+	KEquality(this,EEqualityOperator.EqEqEq,expr)
+
 enum class EComparisonOperator:KotlinAst
 {
 	/**
@@ -1203,10 +1322,22 @@ enum class EComparisonOperator:KotlinAst
 	Le,
 
 	/**
-	 * >=
+	 * $>=
 	 */
 	Ge
 }
+
+infix fun KExpression.greater(expr:KExpression):KComparison=
+	KComparison(this,EComparisonOperator.Gt,expr)
+
+infix fun KExpression.less(expr:KExpression):KComparison=
+	KComparison(this,EComparisonOperator.Lt,expr)
+
+infix fun KExpression.lessEq(expr:KExpression):KComparison=
+	KComparison(this,EComparisonOperator.Le,expr)
+
+infix fun KExpression.greaterEq(expr:KExpression):KComparison=
+	KComparison(this,EComparisonOperator.Ge,expr)
 
 enum class EInOperator:KotlinAst
 {
@@ -1253,22 +1384,90 @@ enum class EAsOperator:KotlinAst
 sealed interface KPrefixUnaryOperator:KUnaryPrefix
 
 data object KAdd:KAdditiveOperator,KPrefixUnaryOperator
+{
+	override val code:String="+"
+}
+
 data object KSub:KAdditiveOperator,KPrefixUnaryOperator
+{
+	override val code:String="-"
+}
+
 data object KMult:KMultiplicativeOperator
+{
+	override val code:String="*"
+}
+
 data object KDiv:KMultiplicativeOperator
+{
+	override val code:String="/"
+}
+
 data object KMod:KMultiplicativeOperator
+{
+	override val code:String="%"
+}
+
 data object KExcl:KPrefixUnaryOperator
+{
+	override val code:String="!"
+}
+
 data object KIncr:KPrefixUnaryOperator,KPostfixUnaryOperator
+{
+	override val code:String="++"
+}
+
 data object KDecr:KPrefixUnaryOperator,KPostfixUnaryOperator
+{
+	override val code:String="--"
+}
+
 sealed interface KPostfixUnaryOperator:KPostfixUnarySuffix
 data object KDoubleExcl:KPostfixUnaryOperator
+{
+	override val code:String="!!"
+}
+
 sealed interface KMemberAccessOperator:KotlinAst
 
+infix fun KExpression.add(other:KExpression):KAdditiveExpression=
+	KAdditiveExpression(this,KAdd,other)
+
+infix fun KExpression.sub(other:KExpression):KAdditiveExpression=
+	KAdditiveExpression(this,KSub,other)
+
+infix fun KExpression.mult(other:KExpression):KMultiplicativeExpression=
+	KMultiplicativeExpression(this,KMult,other)
+
+infix fun KExpression.div(other:KExpression):KMultiplicativeExpression=
+	KMultiplicativeExpression(this,KDiv,other)
+
+infix fun KExpression.mod(other:KExpression):KMultiplicativeExpression=
+	KMultiplicativeExpression(this,KMod,other)
+
+infix fun KExcl.expr(expr:KExpression):KPrefixUnaryExpression=
+	KPrefixUnaryExpression(this,expr)
+
+val KExpression.excl
+	get():KPrefixUnaryExpression=
+		KPrefixUnaryExpression(KExcl,this)
+
 data object KDot:KMemberAccessOperator
+{
+	override val code:String="."
+}
 
 //?.
 data object KSafeNav:KMemberAccessOperator
+{
+	override val code="?."
+}
+
 data object KColonColon:KMemberAccessOperator
+{
+	override val code="::"
+}
 
 data class KModifiers(val mods:NonEmptyList<KModifiersInner>):KotlinAst
 sealed interface KModifiersInner:KotlinAst
@@ -1282,6 +1481,9 @@ data object KConstModifier:KPropertyModifier
 
 sealed interface KTypeModifier:KotlinAst
 data object KSuspendKeyword:KTypeModifier,KSimpleIdentifier
+{
+	override val id="suspend"
+}
 
 enum class EClassModifier:KModifier
 {
@@ -1344,12 +1546,21 @@ enum class EParameterModifier:KModifier,KParameterModifiersInner
 sealed interface KReificationModifier:KTypeParameterModifier
 
 data object KReifiedKeyword:KReificationModifier,KSimpleIdentifier
-
+{
+	override val id="reified"
+}
 
 sealed interface KPlatformModifier:KModifier
 
 data object KExpectKeyword:KPlatformModifier,KSimpleIdentifier
+{
+	override val id="expect"
+}
+
 data object KActualKeyword:KPlatformModifier,KSimpleIdentifier
+{
+	override val id="actual"
+}
 
 sealed interface KAnnotation:
 		KTypeProjectionModifier,
@@ -1368,7 +1579,7 @@ fun anno(left:EAnnotationUseSiteTarget,right:KUnescapedAnnotation)=
 fun anno(right:KUnescapedAnnotation)=
 	KSingleAnnotation(KAt,right)
 
-val KSingleAnnotation.mod get()=KModifiers(nonEmptyListOf(this))
+val KSingleAnnotation.mod get()=KModifiers(this.nel())
 
 sealed interface KAnnotationLeft:KotlinAst
 
@@ -1396,6 +1607,9 @@ sealed interface KSimpleIdentifier:
 		KCallableReferenceInner,
 		KDirectlyAssignableExpression,
 		KNavigationSuffixInner
+{
+	val id:String
+}
 
 fun KSimpleIdentifier.variableDecl(annos:List<KAnnotation>,type:KType):KVariableDeclaration=
 	KVariableDeclaration(annos,this,type.some())
@@ -1404,63 +1618,234 @@ infix fun KSimpleIdentifier.variableDecl(type:KType):KVariableDeclaration=
 	KVariableDeclaration(emptyList(),this,type.some())
 
 val KSimpleIdentifier.variableDecl
-	get()=KVariableDeclaration(emptyList(),this,None)
+	get()=KVariableDeclaration(identifier=this)
 
 /*
 Check with:
 	(Letter | '_') (Letter | '_' | UnicodeDigit)*
     | '`' ~([\r\n] | '`')+ '`'
 */
-data class KIdentifierInner(val name:String):KSimpleIdentifier
+class KIdentifierInner(name:String):KSimpleIdentifier
 {
-	override val code:String
-		get()=name
+	val name=name //if(name.matches(Regex(""))) name else error("Bad identifier: $name")
+	override val id:String=name
+	override val code:String=name
 }
 
 data object KAbstractKeyword:KSimpleIdentifier
+{
+	override val id:String="abstract"
+}
+
 data object KAnnotationKeyword:KSimpleIdentifier
+{
+	override val id:String="annotation"
+}
+
 data object KByKeyword:KSimpleIdentifier
+{
+	override val id:String="by"
+}
+
 data object KCatchKeyword:KSimpleIdentifier
+{
+	override val id:String="catch"
+}
+
 data object KCompanionKeyword:KSimpleIdentifier
+{
+	override val id:String="companion"
+}
+
 data object KConstructorKeyword:KSimpleIdentifier
+{
+	override val id:String="constructor"
+}
+
 data object KCrossinlineKeyword:KSimpleIdentifier
+{
+	override val id:String="crossinline"
+}
+
 data object KDataKeyword:KSimpleIdentifier
+{
+	override val id:String="data"
+}
+
 data object KDynamicKeyword:KSimpleIdentifier
+{
+	override val id:String="dynamic"
+}
+
 data object KEnumKeyword:KSimpleIdentifier
+{
+	override val id:String="enum"
+}
+
 data object KExternalKeyword:KSimpleIdentifier
+{
+	override val id:String="external"
+}
 
 data object KFinalKeyword:KSimpleIdentifier
+{
+	override val id:String="final"
+}
+
 data object KFinallyKeyword:KSimpleIdentifier
+{
+	override val id="finally"
+}
+
 data object KGetKeyword:KSimpleIdentifier
+{
+	override val id="get"
+}
+
 data object KImportKeyword:KSimpleIdentifier
+{
+	override val id="import"
+}
+
 data object KInfixKeyword:KSimpleIdentifier
+{
+	override val id="infix"
+}
+
 data object KInitKeyword:KSimpleIdentifier
+{
+	override val id="init"
+}
+
 data object KInlineKeyword:KSimpleIdentifier
+{
+	override val id="inline"
+}
+
 data object KInnerKeyword:KSimpleIdentifier
+{
+	override val id="inner"
+}
+
 data object KInternalKeyword:KSimpleIdentifier
+{
+	override val id="internal"
+}
+
 data object KLateinitKeyword:KSimpleIdentifier
+{
+	override val id="lateinit"
+}
+
 data object KNoinlineKeyword:KSimpleIdentifier
+{
+	override val id="noinline"
+}
+
 data object KOpenKeyword:KSimpleIdentifier
+{
+	override val id="open"
+}
+
 data object KOperatorKeyword:KSimpleIdentifier
+{
+	override val id="operator"
+}
+
 data object KOutKeyword:KSimpleIdentifier
+{
+	override val id="out"
+}
+
 data object KOverrideKeyword:KSimpleIdentifier
+{
+	override val id="override"
+}
+
 data object KPrivateKeyword:KSimpleIdentifier
+{
+	override val id="private"
+}
+
 data object KProtectedKeyword:KSimpleIdentifier
+{
+	override val id="protected"
+}
+
 data object KPublicKeyword:KSimpleIdentifier
+{
+	override val id="public"
+}
+
 data object KSealedKeyword:KSimpleIdentifier
+{
+	override val id="sealed"
+}
+
 data object KTailrecKeyword:KSimpleIdentifier
+{
+	override val id="tailrec"
+}
+
 data object KSetKeyword:KSimpleIdentifier
+{
+	override val id="set"
+}
+
 data object KVarargKeyword:KSimpleIdentifier
+{
+	override val id="vararg"
+}
+
 data object KWhereKeyword:KSimpleIdentifier
+{
+	override val id="where"
+}
+
 data object KFieldKeyword:KSimpleIdentifier
+{
+	override val id="field"
+}
+
 data object KPropertyKeyword:KSimpleIdentifier
+{
+	override val id="property"
+}
+
 data object KReceiverKeyword:KSimpleIdentifier
+{
+	override val id="receiver"
+}
+
 data object KParamKeyword:KSimpleIdentifier
+{
+	override val id="param"
+}
+
 data object KSetparamKeyword:KSimpleIdentifier
+{
+	override val id="setparam"
+}
+
 data object KDelegateKeyword:KSimpleIdentifier
+{
+	override val id="delegate"
+}
+
 data object KFileKeyword:KSimpleIdentifier
+{
+	override val id="file"
+}
+
 data object KConstKeyword:KSimpleIdentifier
+{
+	override val id="const"
+}
+
 data object KValueKeyword:KSimpleIdentifier
+{
+	override val id="value"
+}
 
 data class KIdentifier(val ids:NonEmptyList<KSimpleIdentifier>):KotlinAst
 {
@@ -1470,7 +1855,7 @@ data class KIdentifier(val ids:NonEmptyList<KSimpleIdentifier>):KotlinAst
 
 abstract class NonEmptyListBuilder<T>(first:T)
 {
-	private var ts=nonEmptyListOf(first)
+	private var ts=first.nel()
 
 	operator fun T.unaryPlus()
 	{
@@ -1485,7 +1870,7 @@ abstract class NonEmptyListBuilder<T>(first:T)
 
 class IdentifierBuilder(first:KIdentifierInner)
 {
-	private var ids=nonEmptyListOf(first)
+	private var ids=first.nel()
 
 	constructor(first:String):this(KIdentifierInner(first))
 

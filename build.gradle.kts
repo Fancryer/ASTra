@@ -17,7 +17,6 @@ dependencies {
     api("org.antlr:antlr4:4.13.0")
     api("org.antlr:antlr4-runtime:4.13.0")
     implementation(kotlin("reflect"))
-    implementation("org.jetbrains.dokka:mathjax-plugin:1.5.31")
 }
 
 tasks.test {

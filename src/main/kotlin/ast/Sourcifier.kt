@@ -1,15 +1,12 @@
 package ast
 
+import org.antlr.v4.runtime.RuleContext
 import org.antlr.v4.runtime.tree.TerminalNode
 import org.antlr.v4.runtime.tree.Tree
 
 class Sourcifier
 {
-	fun sourcify(tree:Tree?)=sourcify(tree,StringBuilder())
-
-	fun sourcify(trees:List<Tree?>):(List<String>)=trees.map(this::sourcify)
-
-	fun sourcify(tree:Tree?,stringBuilder:StringBuilder):String
+	fun sourcify(tree:Tree?,stringBuilder:StringBuilder=StringBuilder()):String
 	{
 		if(tree==null) return ""
 		val childCount=tree.childCount
@@ -21,6 +18,10 @@ class Sourcifier
 			}
 		return stringBuilder.toString().trim().replace("<EOF>","");
 	}
+
+	fun sourcify(trees:List<Tree?>):(List<String>)=
+		trees.map {sourcify(it)}
 }
 
-val Tree?.sourcify get()=Sourcifier().sourcify(this)
+val <T:Tree> T?.sourcify get()=Sourcifier().sourcify(this)
+val <T:Tree> List<T?>.sourcify get()=Sourcifier().sourcify(this)

@@ -1,24 +1,31 @@
 package ast
 
 import arrow.core.*
+import org.antlr.v4.runtime.Lexer
+import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.Distance.UnrealDistance.rd
 import org.fancryer.bf.ast.KotlinAst
-import org.fancryer.bf.distanceFromAncestor
-import org.fancryer.bf.isZero
-import kotlin.reflect.full.isSuperclassOf
+import org.fancryer.bf.ast.errf
+import org.fancryer.bf.ast.rules.InoutLogger
+import org.fancryer.bf.ast.rules.InoutLoggerImpl
+import kotlin.math.log
 
-class RuleHolderBuilder
+class RuleHolderBuilder<LT:Lexer,PT:Parser>
 {
-	private var defaultRule:(Option<DefaultRule>)=none()
+	private var defaultRule:(Option<DefaultRule<LT,PT>>)=none()
 	val rules=mutableListOf<TranspilationRule<out ParseTree,out KotlinAst>>()
+//	val logger:(InoutLogger<out ParseTree,out KotlinAst,Int>)=
+//		InoutLoggerImpl(
+//			{it::class.simpleName?.run {length>15} ?: false},
+//			{it::class.simpleName?.run {length>15} ?: false}
+//		)
 
 	fun default(init:(ParseTree)->KotlinAst)
 	{
-		defaultRule=DefaultRule(init).some()
+		defaultRule=DefaultRule<LT,PT>(init).some()
 	}
 
-	fun default(init:DefaultRule):RuleHolderBuilder
+	fun default(init:DefaultRule<LT,PT>):RuleHolderBuilder<LT,PT>
 	{
 		defaultRule=init.some()
 		return this
@@ -44,7 +51,7 @@ class RuleHolderBuilder
 	 *
 	 * @return null if it can't find it or found rule otherwise
 	 */
-	inline fun <reified P:ParseTree,reified K:KotlinAst> RuleHolderBuilder.lookup():(TranspilationRule<P,K>)?=
+	inline fun <reified P:ParseTree,reified K:KotlinAst> RuleHolderBuilder<LT,PT>.lookup():(TranspilationRule<P,K>)?=
 		rules.filterIsInstance<TranspilationRule<P,K>>()
 			.firstOrNull {
 				it.from==P::class
@@ -106,7 +113,7 @@ class RuleHolderBuilder
 	 * A function that maps a TranspilationRule to a result of type K,
 	 * with a fallback to the 'orElse' value if the mapping result is null.
 	 */
-	inline fun <reified P:ParseTree,reified K:KotlinAst> RuleHolderBuilder.mapWithOrElse(
+	inline fun <reified P:ParseTree,reified K:KotlinAst> RuleHolderBuilder<LT,PT>.mapWithOrElse(
 		m:(TranspilationRule<P,K>)->K,
 		orElse:()->K
 	)=mapWith(m) ?: orElse()
@@ -132,17 +139,12 @@ class RuleHolderBuilder
 		e:()->Throwable
 	):T=mapWithThen<P,K,T>(m,h) ?: throw e()
 
-	fun build():RuleHolder=
+	fun build():(RuleHolder<LT,PT>)=
 		defaultRule.let {
-			when(it)
-			{
-				is Some->when
-				{
-					rules.isNotEmpty()->RuleHolder(it.value,rules)
-					else->RuleHolder(it.value,emptyList())
-				}
-
-				is None->throw Exception("No default")
+			it.fold("No default".errf) {
+				val logger=InoutLoggerImpl<ParseTree,KotlinAst>({true}){true}
+				if(rules.isNotEmpty()) RuleHolder(it,rules,logger)
+				else RuleHolder(it,emptyList(),logger)
 			}
 		}
 }

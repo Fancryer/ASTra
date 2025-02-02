@@ -1,93 +1,76 @@
-rule variable :: VariableContext -> KPrimaryExpression
-variable ctx = `ctx.Id().text.id`;
+grammar Stlc
 
-rule flatType :: FlatContext -> KUserType
-flatType ctx = `KUserType(KSimpleUserType(ctx.Type().text.id,none()).nonEmptyList())`;
+default {|
+  println("default for ${it::class.simpleName}");
+  "TODO".id.call(KLineStringLiteral(emptyList()).valueArg.args)
+|}
 
-rule true_constant :: Constant_trueContext -> EBooleanLiteral
-true_constant _ = `EBooleanLiteral.True`;
+rX X, KSimpleIdentifier ctx ::=
+  {|ctx.ID().text.id|}
 
-rule false_constant :: Constant_falseContext -> EBooleanLiteral
-false_constant _ = `EBooleanLiteral.False`;
+rVariable variable Variable, KSimpleIdentifier ctx ::=
+  {|rX(ctx.x())|}
 
-funct termToType :: Token -> KType
-termToType t = `KUserType(KSimpleUserType(t.text.id,none()).nonEmptyList()).type`;
+rTrue `true` Constant_true, EBooleanLiteral _ ::= {|true.ast|}
+rFalse `false` Constant_false, EBooleanLiteral _ ::= {|false.ast|}
 
-rule funType :: FunContext -> KFunctionType
-funType ctx =
-	let i = `termToType(ctx.\`in\`)` in
-	let o = `termToType(ctx.\`out\`)` in
-    `KFunctionType(
-        none(),
-        KFunctionTypeParameters(
-            #{i}.nonEmptyList()
-        ),
-        #{o}
-    )`
+rParenthesis parenthesis Parenthesis, KParenthesizedExpression ctx ::=
+  {|
+    val tToExp =
+      |?T KExpression?| ?: error("ASTra doesn't know how to get KExpression from Parenthesis");
+    tToExp(ctx.t()).paren
+  |}
 
-rule<FunContext,KFunctionType>("funType") {
-	from(FunContext::class)
-	how {ctx:FunContext->
-		val termToType={t:Token->
-			KUserType(
-				KSimpleUserType(t.text.id,none()).nonEmptyList()
-			).type
-		}
-		KFunctionType(
-			none(),
-			KFunctionTypeParameters(
-				termToType(ctx.`in`).nonEmptyList()
-			),
-			termToType(ctx.`out`)
-		)
-	}
-}
+rConditional conditional Conditional, KIfExpression ctx ::= {|
+  val tToExp=
+    |?T KExpression?| ?: error("ASTra doesn't know how to get KExpression from T");
+  tToExp(ctx.pred).ifElse(
+    tToExp(ctx.if_true).block,
+    tToExp(ctx.if_false).block
+  )
+|}
 
-rule("abstraction") {
-	from(AbstractionContext::class)
-	how {ctx:AbstractionContext->
-		TODO("ABOBA")
-//				val term=mapWithOrThrow<TermContext,KExpression>({it.how(ctx.term())}) {
-//					Exception("No expression for ${ctx.sourcify}")
-//				}
-//				val type=mapWithOrThrow<TypeContext,KTypeInner>({it.how(ctx.type())}) {
-//					Exception("No type for ${ctx.sourcify}")
-//				}
-//
-//				KLambdaLiteral(
-//					KLambdaParameters(
-//						nonEmptyListOf(
-//							KVariableDeclaration(
-//								emptyList(),
-//								ctx.Id().text.id,
-//								type.type.some()
-//							)
-//						)
-//					).some(),
-//					nonEmptyListOf(KStatement(emptyList(),term)).some()
-//				)
-	}
-}
+rT t T, KExpression ctx ::= {|^
+  match ctx to
+  |: Variable -> rVariable it
+  |: Abstraction ->
+    |?Abstraction KFunctionLiteral?| ?? it ?: cant_get "KLambdaLiteral" "Abstraction"
+  |: Application ->
+    |?Application KExpression?| ?? it ?: cant_get "KExpression" "Application"
+  |: Constant_true -> rTrue it
+  |: Constant_false -> rFalse it
+  |: Conditional -> rConditional it
+  |: Parenthesis -> rParenthesis it
+  | _ -> cant_get "KExpression" "${it::class.simpleName}"
+^|}
 
-rule<ApplicationContext,KPostfixUnaryExpression>("application") {
-	from(ApplicationContext::class)
-	how {ctx->
-		val callee=mapWithOrThrow<TermContext,KPrimaryExpression>({it.how(ctx.term(0))}) {
-			Exception("No expression for ${ctx.sourcify}")
-		}
-		val arg=mapWithOrThrow<TermContext,KExpression>({it.how(ctx.term(1))}) {
-			Exception("No expression for ${ctx.sourcify}")
-		}
-		callee.call(arg.valueArg.nonEmptyList())
-	}
-}
+rApplication application Application, KExpression ctx ::= {|
+  val exp=ctx.t(1);
+  rT(ctx.t(0)).paren.call(rT(exp).valueArg.args)
+|}
 
-rule<ParenthesisContext,KParenthesizedExpression>("paren") {
-	from(ParenthesisContext::class)
-	how {ctx->
-		lookup<TermContext,KExpression>()?.how
-			?.let {it(ctx.term())}
-			?.paren
-		?: throw Exception("No expression for ${ctx.sourcify}")
-	}
-}
+rType type Type, KType ctx <|> {|
+  val typeNameToKType={name:String->
+      name.id.simpleUserType.userType.type
+  };
+  val boolify={name:String->
+    ^match name to
+    | "Bool" -> "Boolean"
+    | _ -> name
+    ^
+  };
+  ^match ctx to
+  |: Flat_type -> typeNameToKType (boolify ctx.ID().text)
+  |: Abstraction_type ->
+    ((typeNameToKType(boolify ctx.ID().text)).functionTypeParameters
+      .leadsTo(getType ctx.type()))
+      .type
+  | _ -> cant_get "KType" "${ctx::class.simpleName}"
+  ^
+|}
+
+rAbstraction abstraction Abstraction, KLambdaLiteral ctx ::= {|
+  val id=rX.how(ctx.x());
+  val type=rType.how(ctx.type());
+  (id.variableDecl(type)).lambdaParams.literal(rT.how(ctx.t())).stat
+|}
