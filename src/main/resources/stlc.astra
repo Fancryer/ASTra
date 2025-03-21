@@ -1,76 +1,73 @@
 grammar Stlc
 
-default {|
+import ast.rules
+import stlc.gen.StlcParser
+import stlc.gen.StlcParser.*
+import stlc.gen.StlcLexer
+import stlc.gen.StlcLexer.*
+import org.fancryer.bf.ast.*
+
+default
   println("default for ${it::class.simpleName}");
   "TODO".id.call(KLineStringLiteral(emptyList()).valueArg.args)
-|}
 
-rX X, KSimpleIdentifier ctx ::=
-  {|ctx.ID().text.id|}
+rX X, KSimpleIdentifier ctx ::= ctx.ID().text.id
 
-rVariable variable Variable, KSimpleIdentifier ctx ::=
-  {|rX(ctx.x())|}
+rVariable Variable, KSimpleIdentifier ctx ::= rX(ctx.x())
 
-rTrue `true` Constant_true, EBooleanLiteral _ ::= {|true.ast|}
-rFalse `false` Constant_false, EBooleanLiteral _ ::= {|false.ast|}
+rTrue `true` Constant_true, EBooleanLiteral _ ::= true.ast
+rFalse `false` Constant_false, EBooleanLiteral _ ::= false.ast
 
 rParenthesis parenthesis Parenthesis, KParenthesizedExpression ctx ::=
-  {|
-    val tToExp =
-      |?T KExpression?| ?: error("ASTra doesn't know how to get KExpression from Parenthesis");
-    tToExp(ctx.t()).paren
-  |}
+  val tToExp = |?TContext KExpression?| ?? ()
+    ?: "ASTra doesn't know how to get KExpression from Parenthesis".err;
+  tToExp(ctx.t()).paren
 
-rConditional conditional Conditional, KIfExpression ctx ::= {|
-  val tToExp=
-    |?T KExpression?| ?: error("ASTra doesn't know how to get KExpression from T");
+rConditional conditional Conditional, KIfExpression ctx ::=
+  val tToExp = |?TContext KExpression?|
+    ?: "ASTra doesn't know how to get KExpression from T".err;
   tToExp(ctx.pred).ifElse(
     tToExp(ctx.if_true).block,
     tToExp(ctx.if_false).block
   )
-|}
 
-rT t T, KExpression ctx ::= {|^
+rT t T, KExpression ctx ::=
   match ctx to
-  |: Variable -> rVariable it
-  |: Abstraction ->
-    |?Abstraction KFunctionLiteral?| ?? it ?: cant_get "KLambdaLiteral" "Abstraction"
-  |: Application ->
-    |?Application KExpression?| ?? it ?: cant_get "KExpression" "Application"
-  |: Constant_true -> rTrue it
-  |: Constant_false -> rFalse it
-  |: Conditional -> rConditional it
-  |: Parenthesis -> rParenthesis it
-  | _ -> cant_get "KExpression" "${it::class.simpleName}"
-^|}
+  |: VariableContext -> rVariable(ctx)
+  |: AbstractionContext ->
+    |?AbstractionContext KFunctionLiteral?| ?? ctx
+      ?: "ASTra doesn't know how to get KLambdaLiteral from Abstraction".err
 
-rApplication application Application, KExpression ctx ::= {|
+  |: ApplicationContext ->
+    |?ApplicationContext KExpression?| ?? ctx
+      ?: "ASTra doesn't know how to get KExpression from ApplicationContext".err
+
+  |: Constant_trueContext -> rTrue(ctx)
+  |: Constant_falseContext -> rFalse(ctx)
+  |: ConditionalContext -> rConditional(ctx)
+  |: ParenthesisContext -> rParenthesis(ctx)
+  | _ -> "ASTra doesn't know how to get KExpression from ${ctx::class.simpleName}".err
+
+rApplication application Application, KExpression ctx ::=
   val exp=ctx.t(1);
-  rT(ctx.t(0)).paren.call(rT(exp).valueArg.args)
-|}
+  ctx.t(0).let(rT)
+    .castOr<KExpression,KPrimaryExpression> ({it.paren})
+    .call(rT(exp).valueArg.args)
 
-rType type Type, KType ctx <|> {|
-  val typeNameToKType={name:String->
-      name.id.simpleUserType.userType.type
+rType type Type, KType ctx rType<|>
+  val boolify={name: String ->
+    if(name=="Bool") "Boolean" else name
   };
-  val boolify={name:String->
-    ^match name to
-    | "Bool" -> "Boolean"
-    | _ -> name
-    ^
-  };
-  ^match ctx to
-  |: Flat_type -> typeNameToKType (boolify ctx.ID().text)
-  |: Abstraction_type ->
-    ((typeNameToKType(boolify ctx.ID().text)).functionTypeParameters
-      .leadsTo(getType ctx.type()))
-      .type
-  | _ -> cant_get "KType" "${ctx::class.simpleName}"
-  ^
-|}
+  match ctx to
+  |: Flat_typeContext -> boolify(ctx.ID().text).type
+  |: Abstraction_typeContext ->
+      boolify(ctx.ID().text).type
+        .functionTypeParameters
+        .leadsTo(rType(ctx.type()))
+        .type
+  | _ -> "ASTra doesn't know how to get other KType from ${ctx::class.simpleName}".err
 
-rAbstraction abstraction Abstraction, KLambdaLiteral ctx ::= {|
-  val id=rX.how(ctx.x());
-  val type=rType.how(ctx.type());
-  (id.variableDecl(type)).lambdaParams.literal(rT.how(ctx.t())).stat
-|}
+rAbstraction Abstraction, KLambdaLiteral ctx ::=
+  rX(ctx.x()).variableDecl(rType(ctx.type()))
+    .lambdaParams
+    .literal(rT(ctx.t()).stat)

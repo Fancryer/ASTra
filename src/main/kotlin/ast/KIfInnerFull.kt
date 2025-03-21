@@ -10,7 +10,10 @@ data class KIfInnerFull(
 	override val code:String
 		get()=buildString {
 			ifTrue.onSome {append(it.code)}
-			append(" else ")
-			append(ifFalse.code)
+			if(ifFalse !is KSemicolon)
+			{
+				append(" else ")
+				append(ifFalse.code)
+			}
 		}
 }

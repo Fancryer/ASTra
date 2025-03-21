@@ -3,12 +3,9 @@ package ast
 import org.antlr.v4.runtime.Lexer
 import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.Distance
 import org.fancryer.bf.Distance.UnrealDistance.rd
 import org.fancryer.bf.ast.KotlinAst
 import org.fancryer.bf.distanceFromAncestor
-import java.security.Provider
-import kotlin.reflect.KClass
 import kotlin.reflect.full.isSuperclassOf
 
 inline fun <reified T:ParseTree,R:KotlinAst,T1:ParseTree> Collection<TranspilationRule<out T,out R>>.filterInstancesOf(
@@ -19,6 +16,15 @@ inline fun <reified T:ParseTree,R:KotlinAst,T1:ParseTree> Collection<Transpilati
 		if(T::class.isSuperclassOf(it::class)) newList.add(it as TranspilationRule<T1,R>)
 	}
 	return newList
+}
+
+/***
+ * This enum determines the behavior of the rule visitor when a rule is not found
+ */
+enum class RuleVisitorBehaviour
+{
+	Throw,
+	Fall
 }
 
 class RuleVisitor<LT:Lexer,PT:Parser>(val holder:RuleHolder<LT,PT>)
@@ -44,19 +50,13 @@ class RuleVisitor<LT:Lexer,PT:Parser>(val holder:RuleHolder<LT,PT>)
 		//check if tree is null
 		val t=tree
 
-		val wellTypedRules=holder.rules.filterIsInstance<TranspilationRule<P,KotlinAst>>()
-
-		val rulesWithDistanceToFrom=wellTypedRules.map {distanceFromAncestor(P::class,it.from) to it}
-			.filter {it.first<=5.rd}
-			.sortedBy {it.first}
-			.map {it.second}
-
-		//		val leastRules=rulesWithDistanceToFrom.map {distanceFromAncestor(KotlinAst::class,it.second.nodeClass) to it}
-		//			.sortedByDescending {it.first}
-		//			.map {it.second}
-
-		//get holder rules
-		return rulesWithDistanceToFrom.firstOrNull()
+		return holder.rules
+				   .asSequence()
+				   .filterIsInstance<TranspilationRule<P,KotlinAst>>()
+				   .map {distanceFromAncestor(P::class,it.from) to it}
+				   .filter {it.first<=5.rd}
+				   .sortedBy {it.first}
+				   .map {it.second}.firstOrNull()
 				   //if found then convert ot with `how` function, else null
 				   ?.let {rule->
 					   @Suppress("TYPE_MISMATCH")
@@ -71,7 +71,7 @@ class RuleVisitor<LT:Lexer,PT:Parser>(val holder:RuleHolder<LT,PT>)
 	}
 }
 
-public inline fun <reified R> Iterable<*>.firstInstanceOrNull():R?
+inline fun <reified R> Iterable<*>.firstInstanceOrNull():R?
 {
 	return filterIsInstance<R>().firstOrNull()
 }

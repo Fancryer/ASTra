@@ -9,6 +9,7 @@ import gen.LispParser
 import gen.LispParser.*
 import org.fancryer.bf.*
 import org.fancryer.bf.ast.*
+import org.fancryer.bf.ast.FunctionDeclarationBuilder.Companion.kfun
 import org.fancryer.bf.ast.KPostfixUnaryExpression.Companion.suffix
 import org.fancryer.bf.ast.KPropertyDeclaration.Companion.property
 
@@ -32,7 +33,7 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 
 	default {
 		println("default for ${it::class.simpleName}")
-		"TODO".id.call(KLineStringLiteral(emptyList()).valueArg.args)
+		"TODO".id call KLineStringLiteral().valueArg.args
 	}
 
 	val rLisp=
@@ -67,13 +68,16 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 													.atomic_symbol()
 													.let(atomic::invoke).let {
 														it as? KSimpleIdentifier
-														?: error("define name must be an identifier, not $it")
+														?: error("define name must be an identifier, not ${it::class}")
 													}
 												val args=tail.drop(1)
 													.dropLast(1)
 													.chunked(2) {(l,r)->
 														sexp(l) to sexp(r)
 													}.filterIsInstance<Pair<KSimpleIdentifier,KSimpleIdentifier>>()
+													.map {(k,v)->
+														k.id to v.simpleUserType.userType.type
+													}
 												val (exp,type)=
 													tail.last()
 														?.list()
@@ -81,43 +85,30 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 														?.split()
 													?: error("define must have type and expression")
 												val asType=sexp(type)
-												val funType=(asType as? KSimpleIdentifier)?.let {
-													it.id
-														.replaceFirstChar {it.uppercase()}
-														.id
-														.simpleUserType
-														.userType
-														.type
+												val funType=(asType as? KSimpleIdentifier)?.let {id->
+													id.type {
+														replaceFirstChar {it.uppercase()}
+													}
 												} ?: error(
 													"define type must be an identifier, not ${
 														asType::class
 													}; ${Sourcifier().run {list.sourcify}}"
 												)
-												val funExp=sexp(exp[0])
-												KFunctionDeclaration(
-													identifier=name,
-													functionValueParameters=args.map {(id,type)->
-														type.id
-															.replaceFirstChar {it.uppercase()}
-															.id
-															.simpleUserType
-															.userType
-															.type
-															.let {id functionValueParameter it}
-													}.toNonEmptyListOrNone()
-														.let(::KFunctionValueParameters),
-													type=funType.some(),
-													functionBody=KFunctionAssignExpression(funExp).some()
-												).topLevel
+
+												kfun(name) {
+													valueParameters(args)
+													type(funType)
+													bodyExp(sexp(exp[0]))
+												}
 											}
 										}
 								}
 						}
-						?: "_${dummyCounter++}".id.variableDecl.property(sexp(it)).topLevel
+						?: "_${dummyCounter++}".id.variableDecl.property(sexp(it))
 					}
 					.toList()
 					.let {
-						KKotlinFile(topLevelObjectList=it)
+						KKotlinFile(topLevelObjects=it)
 					}
 			}
 		}
@@ -171,18 +162,15 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 										}
 										val what=rSexp(tail[1])
 										val where=rSexp(tail[2])
-										what.getProp("let".id,KDot) suffix
+										what["let".id] suffix
 												KCallSuffix(
-													None,
 													id.text
 														.id
 														.variableDecl
 														.nel()
-														.let(::KLambdaParameters)
 														.literal(where.stat)
 														.valueArg
-														.nel()
-														.some()
+														.list
 														.let(::KValueArguments)
 												)
 									}
@@ -209,20 +197,13 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 
 
 										val body=rSexp(tail.last())
+
 										args.map {(id,type)->
 											type.id
 												.replaceFirstChar {it.uppercase()}
-												.id
-												.simpleUserType
-												.userType
 												.type
 												.let {id variableDecl it}
-										}.toNonEmptyListOrNone()
-											.let {
-												it.fold({None}) {KLambdaParameters(it).some()}
-											}.let {
-												KLambdaLiteral(it,body.stat.nel().some())
-											}
+										}.let {KLambdaLiteral(it,body.stat.list)}
 									}
 
 									//+*/=<>%-
@@ -237,11 +218,11 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 										val r=rSexp(tail[1])
 										when(op)
 										{
-											"+"->l add r
-											"-"->l sub r
-											"*"->l mult r
-											"/"->l div r
-											"%"->l mod r
+											"+"->l+r
+											"-"->l-r
+											"*"->l*r
+											"/"->l/r
+											"%"->l%r
 											"="->l eqEq r
 											"<"->l less r
 											">"->l greater r

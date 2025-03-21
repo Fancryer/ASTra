@@ -1,13 +1,12 @@
 package ast
 
+import arrow.core.Option
 import org.antlr.v4.runtime.tree.ParseTree
 import org.fancryer.bf.ast.KotlinAst
-import org.fancryer.bf.ast.err
 import org.fancryer.bf.ast.rules.RuleLogger
 import org.fancryer.bf.ast.rules.RuleLoggerImpl
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.ExperimentalReflectionOnLambdas
-import kotlin.reflect.jvm.reflect
 
 //@OptIn(ExperimentalReflectionOnLambdas::class)
 //open class TranspilationRule<F:ParseTree,N:KotlinAst>(
@@ -25,35 +24,36 @@ import kotlin.reflect.jvm.reflect
 @OptIn(ExperimentalReflectionOnLambdas::class)
 class TranspilationRule<P:ParseTree,A:KotlinAst>(
 	val from:KClass<P>,
-	how:(P)->A,
+	val how:(P)->A,
 	val name:String,
 	@Suppress("UNCHECKED_CAST")
-//	val nodeClass:(KClass<A>?)=how.reflect()?.returnType?.classifier as? KClass<A>,
-	val demands:Requirements<P>,
-	val ensures:Requirements<A>,
+	//	val nodeClass:(KClass<A>?)=how.reflect()?.returnType?.classifier as? KClass<A>,
+	val demands:Option<(P)->Boolean>,
+	val ensures:Option<(A)->Boolean>,
+	val unwinds:Option<(Throwable)->A>,
 	val logger:(RuleLogger<P,A>)=RuleLoggerImpl()
 ):(P)->A
 {
-	val how=how.wrapHow(demands,ensures)
 
-	override fun invoke(f:P)=how(f)
+	override fun invoke(f:P):A=
+		try
+		{
+			assert(demands.fold({true}) {it(f)}) {
+				"Demand contract violated"
+			}
+			how(f).apply {
+				assert(ensures.fold({true}) {it(this)}) {
+					"Ensure contract violated"
+				}
+			}
+		}
+		catch(e:Throwable)
+		{
+			unwinds.fold({throw RuntimeException("Unwind was not provided, so rule just fell.",e)}) {it(e)}
+		}
 
 	override fun toString()=
 		"TranspilationRule($name ${from.simpleName} -> \${nodeClass.simpleName} $demands $ensures)"
-
-	companion object
-	{
-		fun <F:ParseTree,N:KotlinAst> ((F)->N).wrapHow(
-			demands:Requirements<F>,
-			ensures:Requirements<N>
-		)={f:F->
-			if(!demands.all {it(f)}) "Demand contract violated".err
-			this(f).let {ret->
-				if(!ensures.all {it(ret)}) "Ensures contract violated".err
-				ret
-			}
-		}
-	}
 }
 
 typealias Requirements<T>

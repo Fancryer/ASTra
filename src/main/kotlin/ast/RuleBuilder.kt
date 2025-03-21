@@ -17,8 +17,9 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 	private var from:(Option<KClass<F>>)=none()
 	private var how:(Option<((F)->N)>)=none()
 	private var name:(Option<String>)=none()
-	private var demands:(List<(F)->Boolean>)=emptyList()
-	private var ensures:(List<(N)->Boolean>)=emptyList()
+	private var demands:(Option<(F)->Boolean>)=None
+	private var ensures:(Option<(N)->Boolean>)=None
+	private var unwinds:(Option<(Throwable)->N>)=None
 	private var logger:(RuleLogger<F,N>)=RuleLoggerImpl()
 
 	fun from(init:()->KClass<F>)
@@ -54,12 +55,17 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 
 	fun demand(init:(F)->Boolean)
 	{
-		demands+=init
+		demands=init.some()
 	}
 
 	fun ensure(init:(N)->Boolean)
 	{
-		ensures+=init
+		ensures=init.some()
+	}
+
+	fun unwind(init:(Throwable)->N)
+	{
+		unwinds=init.some()
 	}
 
 	fun logger(constructor:()->RuleLogger<F,N>,init:RuleLogger<F,N>.()->Unit)=
@@ -67,16 +73,17 @@ class RuleBuilder<F:ParseTree,N:KotlinAst>
 
 	fun build():TranspilationRule<F,N>
 	{
-		val from=from.getOrNull() ?: "from is not set".err
+		val from=from.getOrNull() ?: "from is not set}".err
 		val how=how.getOrNull() ?: "how is not set".err
 		val name=name.getOrNull() ?: "name is not set".err
 		return TranspilationRule(
 			from,
 			how,
 			name,
-			demands=demands,
-			ensures=ensures,
-			logger=logger
+			demands,
+			ensures,
+			unwinds,
+			logger
 		)
 	}
 }

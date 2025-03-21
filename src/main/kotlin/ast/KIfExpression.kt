@@ -25,3 +25,7 @@ ifExpression (used by primaryExpression):
 
 fun KExpression.ifElse(ifTrue:KControlStructureBody,ifFalse:KControlStructureBodyOrSemicolon):KIfExpression=
 	KIfExpression(this,KIfInnerFull(ifTrue.some(),ifFalse))
+
+infix fun KExpression.ifTrue(ifTrue:KControlStructureBody):KIfExpression=
+	ifElse(ifTrue,KSemicolon)
+

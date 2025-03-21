@@ -3,19 +3,26 @@ package org.fancryer.bf
 import arrow.core.*
 import ast.RuleHolder
 import ast.RuleVisitor
+import astra.astra
+import astra.astrap
 import gen.LispLexer
 import gen.LispParser
-import gen.LispParser.LispContext
 import gen.MiniJavaGrammarLexer
 import gen.MiniJavaGrammarParser
 import org.antlr.v4.runtime.*
 import org.fancryer.bf.ast.*
+import org.fancryer.bf.ast.FunctionDeclarationBuilder.Companion.kfun
+import org.fancryer.bf.ast.KBlockBuilder.Companion.kblock
+import org.fancryer.bf.ast.KClassDeclarationBuilder.Companion.kclass
+import org.fancryer.bf.ast.KPostfixUnaryExpression.Companion.index
+import org.fancryer.bf.ast.KPropertyDeclaration.Companion.property
+import org.fancryer.bf.ast.KPropertyDeclarationBuilder.Companion.kval
+import org.fancryer.bf.ast.KotlinFileBuilder.Companion.kotlinFile
 import org.fancryer.bf.examples.lispRuleHolder
 import org.fancryer.bf.examples.stlcRuleHolder
 import stlc.gen.StlcLexer
 import stlc.gen.StlcParser
-import java.util.stream.IntStream.range
-import kotlin.time.Duration
+import java.io.File
 import kotlin.time.measureTime
 
 fun call(expr:KPrimaryExpression,suffix:KPostfixUnarySuffix)=
@@ -70,8 +77,13 @@ fun main()
 	val names=listOf("varF","idF","idTrueF","notF","trueF","firstF","firstFalseTrueF","ffF","ffFalseF")
 
 	measureTime {
-		examples.map {tryT(stlcRuleHolder,it).code}
-			.forEachIndexed {i,it-> println("${names[i]}: $it")}
+		examples.map {
+			val str:String
+			measureTime {
+				str=tryT(stlcRuleHolder,it).code
+			}.let {str to it}
+		}
+			.forEachIndexed {i,(it,time)-> println("${names[i]} [$time]: $it")}
 	}.let {
 		println("Stlc lexed, parsed and transpiled in $it")
 	}
@@ -116,106 +128,170 @@ fun main()
 	""".trimIndent()
 
 	val visitor=RuleVisitor(lispRuleHolder)
-	val times=(0..<1000).asSequence().map {
-		val tuple:Tuple7<Duration,Duration,Duration,Duration,Duration,Duration,Duration>
-		measureTime {
-			buildString {
-				append("[$it] {")
-				val charStream:CharStream
-				val charStreamCreationTime=measureTime {
-					charStream=CharStreams.fromString(src)
+	measureTime {
+		buildString {
+			val charStream=CharStreams.fromString(src)
+			val lexer=LispLexer(charStream)
+			val tokenStream=CommonTokenStream(lexer)
+			val parser:LispParser=LispParser(tokenStream)
+			val tree=parser.lisp()
+			val visited=visitor.visit(tree)
+			val code=visited.code
+			println(code)
+		}
+	}
+	measureTime {
+		buildString {
+			val charStream=CharStreams.fromFileName("src/main/resources/stlc.astra")
+			val lexer=astra(charStream)
+			val tokenStream=CommonTokenStream(lexer)
+			val parser=astrap(tokenStream)
+			val tree=parser.program()
+			val visited=AstralToKotlinMapper().visitProgram(tree)
+			val code=visited.code
+			println(code)
+			File("src/main/kotlin/gen/Stlc.kt") //.writeText(code)
+		}
+	}
+
+	kclass("HelloWorld") {
+		classBody {
+			function("sortByLength") {
+				"strings" ofType "List".id.simpleGeneric("String").userType.type
+				blockBody {
+					+"strings".id.call(
+						KObjectLiteral(
+							false,
+							KDelegationSpecifiers(
+								KAnnotatedDelegationSpecifier(
+									emptyList(),
+									"Comparator".id.simpleGeneric("String").userType
+								).nel()
+							).some(),
+							KClassBody(
+								kfun("compare") {
+									modifiers(KModifiers(EMemberModifier.Override.nel()))
+									type("Int".type)
+									exprBody("a"["length".id]-"b"["length".id])
+								}.list
+							).some()
+						)
+					)
 				}
-				append("\tcharStreamCreationTime: $charStreamCreationTime\n")
-				val lexer:LispLexer
-				val lexerCreationTime=measureTime {
-					lexer=LispLexer(charStream)
-				}
-				append("\tlexerCreationTime: $lexerCreationTime\n")
-				val tokenStream:CommonTokenStream
-				val tokenStreamCreationTime=measureTime {
-					tokenStream=CommonTokenStream(lexer)
-				}
-				append("\ttokenStreamCreationTime: $tokenStreamCreationTime\n")
-				val parser:LispParser
-				val parserCreationTime=measureTime {
-					parser=LispParser(tokenStream)
-				}
-				append("\tparserCreationTime: $parserCreationTime\n")
-				val tree:LispContext
-				val treeParsingTime=measureTime {
-					tree=parser.lisp()
-				}
-				append("\ttreeParsingTime: $treeParsingTime\n")
-				val visited:KotlinAst
-				val visitedTime=measureTime {
-					visited=visitor.visit(tree)
-				}
-				append("\tvisitedTime: $visitedTime\n")
-				val code:String
-				val codeTime=measureTime {
-					code=visited.code
-				}
-				append("\tcodeTime: $codeTime\n")
-				append("}")
-				tuple=Tuple7(
-					charStreamCreationTime,
-					lexerCreationTime,
-					tokenStreamCreationTime,
-					parserCreationTime,
-					treeParsingTime,
-					visitedTime,
-					codeTime
+			}
+		}
+
+		/*
+		class HelloWorld {
+		  fun sortByLength(strings: List<String>) {
+			strings.sortedWith(object : Comparator<String> {
+			  override fun compare(a: String, b: String): Int = a.length - b.length
+			})
+		  }
+		}
+		*/
+	}.also {
+		println(it.code)
+	}
+	//	println(codegenExample().code)
+}
+
+fun codegenExample()=kotlinFile {
+	nonEmptyListOf("java".id,"util".id).let(::KIdentifier)
+		.let(KImportHeader::KWildcardImport)
+		.also(::import)
+
+	+kclass("Task",EClassModifier.Data) {
+		+EClassModifier.Data
+		primaryConstructor {
+			"id" ofType "Int"
+			"description" ofType "String"
+			"isDone" init {
+				isVar()
+				type("Boolean")
+				expression(false.ast)
+			}
+		}
+	}
+
+	+kclass("TaskManager") {
+		classBody {
+			+kval("tasks") {
+				isPrivate
+				expr(
+					"mutableListOf".id.call(
+						"Task".type.proj.nel().typeArgs.some()
+					)
 				)
 			}
-			//			.let {
-			//			"[$n] Lisp lexed, parsed and transpiled in $it" to it
-			//		}
-		}to tuple
-	}
-
-	times.forEachIndexed { index, (it,tuple) ->
-		val (a,b,c,d,e,f,g)=tuple
-		println("index: $index, time: $it {")
-		println("\tcharStreamCreationTime: $a")
-		println("\tlexerCreationTime: $b")
-		println("\ttokenStreamCreationTime: $c")
-		println("\tparserCreationTime: $d")
-		println("\ttreeParsingTime: $e")
-		println("\tvisitedTime: $f")
-		println("\tcodeTime: $g")
-		println("\tavgTime: ${a+b+c+d+e+f+g}")
-		println("\tminTime: ${sequenceOf(a,b,c,d,e,f,g).min()}")
-		println("\tmaxTime: ${sequenceOf(a,b,c,d,e,f,g).max()}")
-		println("\ttotalTime: ${a+b+c+d+e+f+g}")
-		println("}")
-	}
-
-	val avg=(0..<1000).asSequence().map {n->
-		measureTime {
-			//			val file=
-			RuleVisitor(lispRuleHolder).visit(
-				(src pipe
-						CharStreams::fromString pipe
-						::LispLexer pipe
-						::CommonTokenStream pipe
-						::LispParser).lisp()
-			).code
-			//			println("```kotlin")
-			//			println(file)
-			//			println("```")
-		}.let {
-			"[$n] Lisp lexed, parsed and transpiled in $it" to it
+			+kval("nextId") {
+				isPrivate
+				isVal(false)
+				expr(1.ast)
+			}
+			/*
+			private var nextId=1
+			 */
+			function("addTask") {
+				+KFunctionValueParameter(
+					parameter="description".id param "String".type
+				)
+				blockBody {
+					+kval("task") {
+						"Task".id.call("nextId".id.incr,"description".id).expr
+					}
+					+"tasks"["add".id].primary.call("task".id)
+					+"println".id.call("Задача добавлена: \$task".ast)
+				}
+			}
+			"listTasks" funBlock {
+				stat(
+					"tasks"["isEmpty".id].primary.call() ifTrue
+							kblock {
+								+"println".id.call("Нет задач.".ast)
+								+kreturn
+							}
+				)
+				+"println".id.call("Список задач:".ast)
+				"tasks"["forEach".id].primary.call(
+					KLambdaLiteral(
+						"task".id.variableDecl.lambdaParams,
+						listOf(
+							"status".id.variableDecl.property(
+								"task"["isDone".id].ifElse("[✓]".ast.stat,"[ ]".ast.stat)
+							).stat,
+							"println".id.call(
+								"\$status \${task.id}: \${task.description}".ast
+							).stat
+						)
+					)
+				)
+			}
+			/*
+			fun listTasks()
+			{
+				if(tasks.isEmpty())
+				{
+					println("Нет задач.")
+					return
+				}
+				println("Список задач:")
+				tasks.forEach {task->
+					val status=if(task.isDone) "[✓]" else "[ ]"
+					println("$status ${task.id}: ${task.description}")
+				}
+			}
+			*/
 		}
-	}.onEach {(s,_)->
-		println(s)
-	}.map {
-		it.second
-	}.reduceOrNull {acc,duration->
-		acc+duration
-	}?.div(1000)
-			?: Duration.ZERO
-	println("Avg time: $avg")
+	}
 }
+
+val KExpression.primary:KPrimaryExpression
+	get()=when(this)
+	{
+		is KPrimaryExpression->this
+		else->this.paren
+	}
 
 fun add(x:Int,y:Int):Int=
 	(x+y).let {res->
@@ -223,13 +299,12 @@ fun add(x:Int,y:Int):Int=
 	}
 
 fun tryT(holder:RuleHolder<StlcLexer,StlcParser>,src:String):KotlinAst=
-	RuleVisitor(holder).visit(
-		(src pipe
-				CharStreams::fromString pipe
-				::StlcLexer pipe
-				::CommonTokenStream pipe
-				::StlcParser).t()
-	)
+	src.let(CharStreams::fromString)
+		.let(::StlcLexer)
+		.let(::CommonTokenStream)
+		.let(::StlcParser)
+		.t()
+		.let(RuleVisitor(holder)::visit)
 
 fun <T,R> fix(f:((T)->R)->(T)->R):(T)->R=
 	{x-> f(fix(f))(x)}
@@ -241,9 +316,9 @@ val Boolean.ast get()=if(this) EBooleanLiteral.True else EBooleanLiteral.False
 val KExpression.paren get()=KParenthesizedExpression(this)
 
 val KExpression.valueArg get()=KValueArgument(None,None,false,this)
-val KValueArgument.args get()=KValueArguments(nel().some())
+val KValueArgument.args get()=KValueArguments(list)
 
-val KStatement.lambda get()=KLambdaLiteral(None,nel().some())
+val KStatement.lambda get()=KLambdaLiteral(emptyList(),list)
 
 val KStatementInner.stat get()=KStatement(emptyList(),this)
 val KStatementInner.block get()=stat.block
@@ -255,7 +330,10 @@ inline infix fun <T,R> T.pipe(f:(T)->R)=let(f)
 fun <T,R,C> T.pipeWith(g:C,f:(Pair<T,C>)->R)=f(this to g)
 
 fun <P:Parser,L:Lexer> getParser(src:String,p:(TokenStream)->P,l:(CharStream)->L)=
-	CharStreams.fromString(src) pipe l pipe ::CommonTokenStream pipe p
+	src.let(CharStreams::fromString)
+		.let(l)
+		.let(::CommonTokenStream)
+		.let(p)
 
 fun getParser(src:String)=getParser(src,::MiniJavaGrammarParser,::MiniJavaGrammarLexer)
 
@@ -268,11 +346,17 @@ val Int.ast get()=KIntegerLiteral(this)
 val KExpression.strExpr:KLineStringExpression
 	get()=KLineStringExpression(this)
 
-fun KPrimaryExpression.call(suffix:KCallSuffixInner,args:(Option<KTypeArguments>)=none())=
+fun KPrimaryExpression.call(
+	suffix:KCallSuffixInner,
+	args:(Option<KTypeArguments>)=none()
+)=
 	KPostfixUnaryExpression(
 		this,
-		KCallSuffix(args,suffix).list
+		KCallSuffix(suffix,args).list
 	)
+
+fun KPrimaryExpression.call(args:(Option<KTypeArguments>)=none())=
+	call(KValueArguments(emptyList()),args)
 
 fun KPrimaryExpression.call(
 	valueArgs:NonEmptyList<KValueArgument>,
@@ -280,37 +364,58 @@ fun KPrimaryExpression.call(
 )=
 	KPostfixUnaryExpression(
 		this,
-		KCallSuffix(args,KValueArguments(valueArgs.some())).list
+		KCallSuffix(KValueArguments(valueArgs),args).list
 	)
 
-fun KExpression.getProp(prop:KNavigationSuffixInner,op:KMemberAccessOperator=KDot)=
+fun KPrimaryExpression.call(vararg valueArgs:KValueArgument):KPostfixUnaryExpression=
+	call(valueArgs.toList().toNonEmptyListOrNull() ?: error("No arguments"))
+
+fun KPrimaryExpression.call(vararg valueArgs:KExpression):KPostfixUnaryExpression=
+	call(valueArgs.map {it.valueArg}.toNonEmptyListOrNull() ?: error("No arguments"))
+
+infix fun KPrimaryExpression.call(valueArgs:NonEmptyList<KValueArgument>):KPostfixUnaryExpression=
+	call(valueArgs,None)
+
+infix fun KPrimaryExpression.call(suffix:KCallSuffixInner):KPostfixUnaryExpression=
+	call(suffix,None)
+
+val KPrimaryExpression.incr:KPostfixUnaryExpression
+	get()=KPostfixUnaryExpression(this,KIncr.list)
+
+fun KExpression.getProp(prop:KNavigationSuffixInner,op:KMemberAccessOperator=KDot):KPostfixUnaryExpression=
 	KPostfixUnaryExpression(
 		if(this is KPrimaryExpression) this else this.paren,
-		KNavigationSuffix(op,prop).list
+		KNavigationSuffix(prop,op).list
 	)
 
-val KDeclaration.topLevel get()=KTopLevelObject(this)
+operator fun KExpression.get(prop:KNavigationSuffixInner):KPostfixUnaryExpression=
+	getProp(prop)
+
+operator fun String.get(prop:KNavigationSuffixInner):KPostfixUnaryExpression=
+	id[prop]
+
+fun KExpression.getProp(prop:String,op:KMemberAccessOperator=KDot):KPostfixUnaryExpression=
+	getProp(prop.id,op)
 
 val String.id get()=KIdentifierInner(this)
 
 val KSimpleIdentifier.simpleUserType get()=KSimpleUserType(this,none())
-fun KSimpleIdentifier.simpleGeneric(projection:org.fancryer.bf.ast.KTypeProjection)=
+fun KSimpleIdentifier.simpleGeneric(projection:KTypeProjection)=
 	KSimpleUserType(
 		this,
 		KTypeArguments(projection.nel()).some()
 	)
 
-val KSimpleUserType.userType get()=KUserType(this.nel())
+fun KSimpleIdentifier.simpleGeneric(type:KType)=simpleGeneric(type.proj)
+fun KSimpleIdentifier.simpleGeneric(type:String)=simpleGeneric(type.type)
 
-val KSimpleUserType.anno get()=anno(KUserType(this.nel()))
+val KSimpleUserType.userType get()=KUserType(this.nel(),0)
+
+val KSimpleUserType.anno get()=anno(KUserType(this.nel(),0))
 
 val KConcreteTypeProjection.args get()=KTypeArguments(this.nel())
 
-val KTypeInner.type get()=KType(None,this)
-
-val KType.concreteTypeProjection get()=KConcreteTypeProjection(None,this)
-fun KType.concreteTypeProjection(modifiers:KTypeProjectionModifiers)=
-	KConcreteTypeProjection(modifiers.some(),this)
+val KTypeInner.type get()=KType(emptyList(),this)
 
 infix fun KSimpleIdentifier.functionValueParameter(type:KType)=
 	KFunctionValueParameter(None,KParameter(this,type),None)

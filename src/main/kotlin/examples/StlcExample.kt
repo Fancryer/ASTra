@@ -1,5 +1,6 @@
 package org.fancryer.bf.examples
 
+import arrow.core.nel
 import ast.rules
 import org.fancryer.bf.*
 import org.fancryer.bf.ast.*
@@ -14,7 +15,7 @@ inline infix fun <reified T:Any,reified R:Any> T.castOr(r:(T)->R):R=
 val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 	default {
 		println("default for ${it::class.simpleName}")
-		"TODO".id.call(KLineStringLiteral(emptyList()).valueArg.args)
+		"TODO".id.call()
 	}
 
 	val rX=
@@ -88,50 +89,48 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 			}
 		}
 
-	val rApplication=
-		rule<ApplicationContext,KExpression>("application") {
-			from(ApplicationContext::class)
-			howCtx {
-				val exp=t(1)
-				t(0).let(rT)
-					.castOr<KExpression,KPrimaryExpression> {it.paren}
-					.call(rT(exp).valueArg.args)
+		val rApplication=
+			rule<ApplicationContext,KExpression>("application") {
+				from(ApplicationContext::class)
+				how {ctx->
+					val exp=ctx.t(1)
+					ctx.t(0).let(rT)
+						.castOr<KExpression,KPrimaryExpression> {it.paren}
+						.call(rT(exp).valueArg.nel())
+				}
 			}
-		}
 
-	val rType=
-		rule("type") {
-			from(TypeContext::class)
-			howFixed {rType->
-				{ctx:TypeContext->
-					val typeNameToKType={name:String->
-						name.id.simpleUserType.userType.type
-					}
-					val boolify={name:String->
-						if(name=="Bool") "Boolean" else name
-					}
-					when(ctx)
-					{
-						is Flat_typeContext->typeNameToKType(boolify(ctx.ID().text))
+		val rType=
+			rule("type") {
+				from(TypeContext::class)
+				howFixed {rType->
+					{ctx:TypeContext->
+						val boolify={name:String->
+							if(name=="Bool") "Boolean" else name
+						}
+						when(ctx)
+						{
+							is Flat_typeContext->boolify(ctx.ID().text).type
 
-						is Abstraction_typeContext->
-							typeNameToKType(boolify(ctx.ID().text)).functionTypeParameters
-								.leadsTo(rType(ctx.type()))
-								.type
+							is Abstraction_typeContext->
+								boolify(ctx.ID().text).type
+									.functionTypeParameters
+									.leadsTo(rType(ctx.type()))
+									.type
 
-						else->"ASTra doesn't know how to get other KType from ${ctx::class.simpleName}".err
+							else->"ASTra doesn't know how to get other KType from ${ctx::class.simpleName}".err
+						}
 					}
 				}
 			}
-		}
 
-	val rAbstraction=
-		rule<AbstractionContext,KLambdaLiteral>("abstraction") {
-			from(AbstractionContext::class)
-			howCtx {
-				val id=rX(x())
-				val type=rType(type())
-				id.variableDecl(type).lambdaParams.literal(rT(t()).stat)
+		val rAbstraction=
+			rule<AbstractionContext,KLambdaLiteral>("abstraction") {
+				from(AbstractionContext::class)
+				how {ctx->
+					rX(ctx.x()).variableDecl(rType(ctx.type()))
+						.lambdaParams
+						.literal(rT(ctx.t()).stat)
+				}
 			}
-		}
-}
+	}

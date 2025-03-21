@@ -47,7 +47,7 @@ fun distanceFromAncestor(descendant:KClass<*>,ancestor:KClass<*>):Distance
 
 	while(currentClass!=null&&currentClass!=ancestor)
 	{
-		distance++
+		++distance
 		currentClass=currentClass.allSuperclasses.firstOrNull {it==ancestor||ancestor in it.allSuperclasses}
 	}
 
@@ -62,7 +62,7 @@ fun distanceFromAncestorWithPath(descendant:KClass<*>,ancestor:KClass<*>):Pair<D
 
 	while(currentClass!=null&&currentClass!=ancestor)
 	{
-		distance++
+		++distance
 		path.add(currentClass)
 		currentClass=currentClass.allSuperclasses.firstOrNull {it==ancestor||ancestor in it.allSuperclasses}
 	}
@@ -80,13 +80,6 @@ fun <T:Any> sortClassesByDistanceTo(descendant:KClass<out T>,classes:List<KClass
 
 inline fun <reified T:Any> groupClasses(classes:List<KClass<out T>>)=
 	classes.groupBy {distanceFromAncestor(it,T::class)}
-
-sealed class A
-sealed class B:A()
-sealed class C:A()
-sealed class D:B()
-sealed class E:C()
-
 
 fun <T:Any,R:Any> compareClasses(t:KClass<T>,r:KClass<R>)=println("$t ${if(t==r) '=' else '!'}= $r")
 

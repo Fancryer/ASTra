@@ -11,16 +11,16 @@ fun KotlinAst.code():String=
 				if(shebang is Some) append(shebang.value).append('\n')
 				annotations.map {it.code}.forEach {append(it).append('\n')}
 				append(packageHeader.code)
-				importList.map {it.code}.forEach {append(it).append('\n')}
-				topLevelObjectList.map {it.code}.forEach {append(it).append('\n')}
+				imports.map {it.code}.forEach {append(it).append('\n')}
+				topLevelObjects.map {it.code}.forEach {append(it).append('\n')}
 			}
 
 		is KPackageHeader->if(identifier is Some) "package ${identifier.value.code}\n" else ""
 
 		is KIdentifier->
 			buildString {
-				ids.map(KSimpleIdentifier::code).forEachIndexed {index,it->
-					append(it)
+				ids.map(KSimpleIdentifier::code).forEachIndexed {index,code->
+					append(code)
 					if(index<ids.size-1) append('.')
 				}
 			}
@@ -88,7 +88,6 @@ fun KotlinAst.code():String=
 		KVarargKeyword->"vararg"
 		KWhereKeyword->"where"
 
-		is KTopLevelObject->declaration.code
 		is KClassDeclaration->
 			buildString {
 				if(modifiers is Some) append(modifiers.value.code).append(' ')
@@ -101,15 +100,6 @@ fun KotlinAst.code():String=
 				append(body.code)
 			}
 
-		is KClassBody->
-			buildString {
-				append('{')
-				append(memberDeclarations.code)
-				append('}')
-			}
-
-		is KClassMemberDeclarations->memberDeclarations.joinToString(";") {it.code}
-
 		is KFunctionDeclaration->
 			buildString {
 				if(modifiers is Some) append(modifiers.value.code).append(' ')
@@ -117,7 +107,7 @@ fun KotlinAst.code():String=
 				if(typeParameters is Some) append(typeParameters.value.code).append(' ')
 				if(receiverType is Some) append(receiverType.value.code).append('.')
 				append(identifier.code)
-				append(functionValueParameters.code)
+				append(functionValueParameters.joinToString {it.code})
 				if(type is Some) append(':').append(type.value.code)
 				if(typeConstraints is Some) append(typeConstraints.value.code)
 				if(functionBody is Some) append(functionBody.value.code)
@@ -127,11 +117,11 @@ fun KotlinAst.code():String=
 		is KPropertyDeclaration->"ё"
 		is KTypeAlias->"ё"
 
-		is KFunctionValueParameters->
+		is KClassBody->
 			buildString {
-				append('(')
-				if(params is Some) append(params.value.joinToString(",") {it.code})
-				append(')')
+				append('{')
+				append(memberDeclarations.joinToString(";") {it.code})
+				append('}')
 			}
 
 		is KType->
@@ -142,7 +132,7 @@ fun KotlinAst.code():String=
 		is KBlock->
 			buildString {
 				append('{')
-				if(statements is Some) statements.value.forEach {append(it.code)}
+				statements.forEach {append(it.code)}
 				append('}')
 			}
 
@@ -167,7 +157,7 @@ fun KotlinAst.code():String=
 		is KValueArguments->
 			buildString {
 				append('(')
-				if(args is Some) append(args.value.joinToString(",") {it.code})
+				append(args.joinToString(",") {it.code})
 				append(')')
 			}
 
