@@ -14,6 +14,7 @@ import org.fancryer.bf.ast.*
 import org.fancryer.bf.ast.FunctionDeclarationBuilder.Companion.kfun
 import org.fancryer.bf.ast.KBlockBuilder.Companion.kblock
 import org.fancryer.bf.ast.KClassDeclarationBuilder.Companion.kclass
+import org.fancryer.bf.ast.KObjectLiteralBuilder.Companion.kobjectLiteral
 import org.fancryer.bf.ast.KPostfixUnaryExpression.Companion.index
 import org.fancryer.bf.ast.KPropertyDeclaration.Companion.property
 import org.fancryer.bf.ast.KPropertyDeclarationBuilder.Companion.kval
@@ -160,22 +161,25 @@ fun main()
 				"strings" ofType "List".id.simpleGeneric("String").userType.type
 				blockBody {
 					+"strings".id.call(
-						KObjectLiteral(
-							false,
-							KDelegationSpecifiers(
-								KAnnotatedDelegationSpecifier(
-									emptyList(),
-									"Comparator".id.simpleGeneric("String").userType
-								).nel()
-							).some(),
-							KClassBody(
-								kfun("compare") {
-									modifiers(KModifiers(EMemberModifier.Override.nel()))
-									type("Int".type)
-									exprBody("a"["length".id]-"b"["length".id])
-								}.list
-							).some()
-						)
+						kobjectLiteral {
+							delegationSpecifiers(
+								"Comparator".id
+									.simpleGeneric("String")
+									.userType
+									.delegationSpecifier
+									.nel()
+									.let(::KDelegationSpecifiers)
+							)
+							body(
+								KClassBody(
+									kfun("compare") {
+										+EMemberModifier.Override
+										type("Int".type)
+										exprBody("a"["length".id]-"b"["length".id])
+									}.list
+								)
+							)
+						}
 					)
 				}
 			}

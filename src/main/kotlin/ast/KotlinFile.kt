@@ -34,6 +34,8 @@ class KUserType(
 		get()=types.joinToString(".") {it.code}
 }
 
+val KUserType.delegationSpecifier get()=KAnnotatedDelegationSpecifier(this)
+
 data class KPackageHeader(
 	val identifier:(Option<KIdentifier>)=None
 ):KotlinAst
@@ -463,8 +465,8 @@ data class KConstructorInvocation(
 ):KUnescapedAnnotation,KDelegationSpecifier
 
 data class KAnnotatedDelegationSpecifier(
-	val annotations:List<KAnnotation>,
-	val delegationSpecifier:KDelegationSpecifier
+	val delegationSpecifier:KDelegationSpecifier,
+	val annotations:(List<KAnnotation>)=emptyList()
 ):KotlinAst
 {
 	override val code:String=buildString {
@@ -607,13 +609,13 @@ class FunctionDeclarationBuilder(private var identifier:KSimpleIdentifier)
 	}
 
 	infix fun String.ofType(type:KType)=
-		+KFunctionValueParameter(parameter = this.id param type)
+		+KFunctionValueParameter(parameter=this.id param type)
 
 	infix fun String.ofType(type:String)=
 		this ofType type.type
 
 	infix fun KSimpleIdentifier.ofType(type:KType)=
-		+KFunctionValueParameter(parameter = this param type)
+		+KFunctionValueParameter(parameter=this param type)
 
 	infix fun KSimpleIdentifier.ofType(type:String)=
 		this ofType type.type
@@ -1707,6 +1709,25 @@ data class KAnonymousFunction(
 				append(it.code)
 			}
 		}
+}
+
+class KObjectLiteralBuilder
+{
+	private var isData=false
+	private var specifiers:(Option<KDelegationSpecifiers>)=None
+	private var body:(Option<KClassBody>)=None
+
+	val data get()=apply {isData=true}
+	fun specifiers(specifiers:KDelegationSpecifiers)=apply {this.specifiers=Some(specifiers)}
+	fun body(body:KClassBody)=apply {this.body=Some(body)}
+
+	private fun build():KObjectLiteral=KObjectLiteral(isData,specifiers,body)
+
+	companion object
+	{
+		fun kobjectLiteral(block:KObjectLiteralBuilder.()->Unit):KObjectLiteral=
+			KObjectLiteralBuilder().apply(block).build()
+	}
 }
 
 data class KObjectLiteral(
