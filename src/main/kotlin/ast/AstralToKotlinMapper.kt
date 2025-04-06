@@ -1,12 +1,14 @@
-package org.fancryer.bf.ast
+package ast
 
 import arrow.core.*
+import ast.*
+import ast.KPropertyDeclarationBuilder.Companion.kpropertyDeclaration
 import astra.astrap.*
 import astra.astrapBaseVisitor
-import org.fancryer.bf.*
-import org.fancryer.bf.ast.KImportHeader.KSingleImport
-import org.fancryer.bf.ast.KImportHeader.KWildcardImport
-import org.fancryer.bf.ast.KPropertyDeclarationBuilder.Companion.kpropertyDeclaration
+import org.fancryer.bf.call
+import org.fancryer.bf.id
+import org.fancryer.bf.list
+import org.fancryer.bf.valueArg
 
 class AstralToKotlinMapper:astrapBaseVisitor<KotlinAst>()
 {
@@ -51,8 +53,8 @@ class AstralToKotlinMapper:astrapBaseVisitor<KotlinAst>()
 		val id=identifier(head) {tail.forEach {+it}}
 		return when(ctx.Star())
 		{
-			null->KSingleImport(id)
-			else->KWildcardImport(id)
+			null->KImportHeader.KSingleImport(id)
+			else->KImportHeader.KWildcardImport(id)
 		}
 	}
 

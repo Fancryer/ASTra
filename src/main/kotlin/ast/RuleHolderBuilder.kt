@@ -4,11 +4,7 @@ import arrow.core.*
 import org.antlr.v4.runtime.Lexer
 import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.ast.KotlinAst
-import org.fancryer.bf.ast.errf
-import org.fancryer.bf.ast.rules.InoutLogger
-import org.fancryer.bf.ast.rules.InoutLoggerImpl
-import kotlin.math.log
+import ast.rules.InoutLoggerImpl
 
 class RuleHolderBuilder<LT:Lexer,PT:Parser>
 {
@@ -141,7 +137,7 @@ class RuleHolderBuilder<LT:Lexer,PT:Parser>
 
 	fun build():(RuleHolder<LT,PT>)=
 		defaultRule.let {
-			it.fold("No default".errf) {
+			it.fold({error("No default")}) {
 				val logger=InoutLoggerImpl<ParseTree,KotlinAst>({true}){true}
 				if(rules.isNotEmpty()) RuleHolder(it,rules,logger)
 				else RuleHolder(it,emptyList(),logger)

@@ -1,4 +1,4 @@
-package org.fancryer.bf.ast
+package ast
 
 import arrow.core.Option
 import arrow.core.none
@@ -55,29 +55,3 @@ data class KKotlinFile(
 	val imports:(List<KImportHeader>)=emptyList(),
 	val topLevelObjects:(List<KDeclaration>)=emptyList()
 ):KotlinAst
-{
-	override val code:String=buildString {
-		shebang.onSome(::appendLine)
-		annotations.map {it.code}.forEach(::appendLine)
-		appendLine(packageHeader.code)
-		imports.map {it.code}.forEach(::appendLine)
-		topLevelObjects.map {it.code}.forEach(::appendLine)
-	}
-}
-/*
-(fun fact n int (if (= n 0) 1 (* n (factorial (- n 1)))))
-
-;*
-let a = 5 - 3 in a * a
-(5 - 3).let {a -> a * a}
-*;
-
-
-(let
-  x
-  10
-  (let
-    square
-    (lambda (n) (* n n)))
-    (square x))
-*/

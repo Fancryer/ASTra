@@ -1,14 +1,14 @@
 package ast
 
+import Distance.UnrealDistance.rd
+import distanceFromAncestor
 import org.antlr.v4.runtime.Lexer
 import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.Distance.UnrealDistance.rd
-import org.fancryer.bf.ast.KotlinAst
-import org.fancryer.bf.distanceFromAncestor
 import kotlin.reflect.full.isSuperclassOf
 
-inline fun <reified T:ParseTree,R:KotlinAst,T1:ParseTree> Collection<TranspilationRule<out T,out R>>.filterInstancesOf(
+inline fun <reified T:ParseTree,R:KotlinAst,T1:ParseTree>
+		Collection<TranspilationRule<out T,out R>>.filterInstancesOf(
 ):List<TranspilationRule<T1,out R>>
 {
 	val newList=mutableListOf<TranspilationRule<T1,R>>()

@@ -1,9 +1,8 @@
-package org.fancryer.bf.examples
+package examples
 
 import arrow.core.nel
-import ast.rules
+import ast.*
 import org.fancryer.bf.*
-import org.fancryer.bf.ast.*
 import stlc.gen.StlcLexer
 import stlc.gen.StlcParser
 import stlc.gen.StlcParser.*
@@ -47,7 +46,7 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 			from(ParenthesisContext::class)
 			how {ctx:ParenthesisContext->
 				val tToExp=lookup<TContext,KExpression>()
-						   ?: "ASTra doesn't know how to get KExpression from Parenthesis".err
+						   ?: error("ASTra doesn't know how to get KExpression from Parenthesis")
 				tToExp(ctx.t()).paren
 			}
 		}
@@ -57,7 +56,7 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 			from(ConditionalContext::class)
 			how {ctx:ConditionalContext->
 				val tToExp=lookup<TContext,KExpression>()
-						   ?: "ASTra doesn't know how to get KExpression from T".err
+						   ?: error("ASTra doesn't know how to get KExpression from T")
 				tToExp(ctx.pred).ifElse(
 					tToExp(ctx.if_true).block,
 					tToExp(ctx.if_false).block
@@ -74,17 +73,17 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 					is VariableContext->rVariable(ctx)
 					is AbstractionContext->
 						lookup<AbstractionContext,KFunctionLiteral>()?.invoke(ctx)
-						?: "ASTra doesn't know how to get KLambdaLiteral from Abstraction".err
+						?: error("ASTra doesn't know how to get KLambdaLiteral from Abstraction")
 
 					is ApplicationContext->
 						lookup<ApplicationContext,KExpression>()?.invoke(ctx)
-						?: "ASTra doesn't know how to get KExpression from ApplicationContext".err
+						?: error("ASTra doesn't know how to get KExpression from ApplicationContext")
 
 					is Constant_trueContext->rTrue(ctx)
 					is Constant_falseContext->rFalse(ctx)
 					is ConditionalContext->rConditional(ctx)
 					is ParenthesisContext->rParenthesis(ctx)
-					else->"ASTra doesn't know how to get KExpression from ${ctx::class.simpleName}".err
+					else->error("ASTra doesn't know how to get KExpression from ${ctx::class.simpleName}")
 				}
 			}
 		}
@@ -94,9 +93,7 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 				from(ApplicationContext::class)
 				how {ctx->
 					val exp=ctx.t(1)
-					ctx.t(0).let(rT)
-						.castOr<KExpression,KPrimaryExpression> {it.paren}
-						.call(rT(exp).valueArg.nel())
+					ctx.t(0).let(rT).primary call rT(exp).valueArg.nel()
 				}
 			}
 
@@ -118,7 +115,7 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 									.leadsTo(rType(ctx.type()))
 									.type
 
-							else->"ASTra doesn't know how to get other KType from ${ctx::class.simpleName}".err
+							else->error("ASTra doesn't know how to get other KType from ${ctx::class.simpleName}")
 						}
 					}
 				}

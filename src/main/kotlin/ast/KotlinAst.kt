@@ -1,6 +1,3 @@
-package org.fancryer.bf.ast
+package ast
 
 interface KotlinAst
-{
-	val code:String get()=toString()
-}

@@ -1,0 +1,3 @@
+package ast
+
+sealed interface KDelegationSpecifier:KotlinAst

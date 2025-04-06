@@ -1,4 +1,4 @@
-package org.fancryer.bf.ast
+package ast
 
 import arrow.core.NonEmptyList
 import arrow.core.None

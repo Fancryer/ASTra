@@ -1,17 +1,17 @@
-package org.fancryer.bf.examples
+package examples
 
-import arrow.core.*
-import ast.Sourcifier
-import ast.rules
-import ast.sourcify
+import arrow.core.NonEmptyList
+import arrow.core.nel
+import arrow.core.split
+import arrow.core.toNonEmptyListOrNull
+import ast.*
+import ast.FunctionDeclarationBuilder.Companion.kfun
+import ast.KPostfixUnaryExpression.Companion.suffix
+import ast.KPropertyDeclaration.Companion.property
 import gen.LispLexer
 import gen.LispParser
 import gen.LispParser.*
 import org.fancryer.bf.*
-import org.fancryer.bf.ast.*
-import org.fancryer.bf.ast.FunctionDeclarationBuilder.Companion.kfun
-import org.fancryer.bf.ast.KPostfixUnaryExpression.Companion.suffix
-import org.fancryer.bf.ast.KPropertyDeclaration.Companion.property
 
 sealed interface SExp
 sealed interface AtomicSymbol

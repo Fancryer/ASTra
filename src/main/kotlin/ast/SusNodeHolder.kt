@@ -1,7 +1,6 @@
 package ast
 
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.ast.KotlinAst
 
 data class SusNodeHolder<H:KotlinAst>(val node:H?)
 {

@@ -1,26 +1,23 @@
 package org.fancryer.bf
 
 import arrow.core.*
-import ast.RuleHolder
-import ast.RuleVisitor
+import ast.*
+import ast.KBlockBuilder.Companion.kblock
+import ast.KClassDeclarationBuilder.Companion.kclass
+import ast.KObjectLiteralBuilder.Companion.kobjectLiteral
+import ast.KPropertyDeclaration.Companion.property
+import ast.KPropertyDeclarationBuilder.Companion.kval
+import ast.KotlinFileBuilder.Companion.kotlinFile
 import astra.astra
 import astra.astrap
+import emitter.KotlinEmitter
+import examples.lispRuleHolder
+import examples.stlcRuleHolder
 import gen.LispLexer
 import gen.LispParser
 import gen.MiniJavaGrammarLexer
 import gen.MiniJavaGrammarParser
 import org.antlr.v4.runtime.*
-import org.fancryer.bf.ast.*
-import org.fancryer.bf.ast.FunctionDeclarationBuilder.Companion.kfun
-import org.fancryer.bf.ast.KBlockBuilder.Companion.kblock
-import org.fancryer.bf.ast.KClassDeclarationBuilder.Companion.kclass
-import org.fancryer.bf.ast.KObjectLiteralBuilder.Companion.kobjectLiteral
-import org.fancryer.bf.ast.KPostfixUnaryExpression.Companion.index
-import org.fancryer.bf.ast.KPropertyDeclaration.Companion.property
-import org.fancryer.bf.ast.KPropertyDeclarationBuilder.Companion.kval
-import org.fancryer.bf.ast.KotlinFileBuilder.Companion.kotlinFile
-import org.fancryer.bf.examples.lispRuleHolder
-import org.fancryer.bf.examples.stlcRuleHolder
 import stlc.gen.StlcLexer
 import stlc.gen.StlcParser
 import java.io.File
@@ -33,14 +30,6 @@ val <T> T?.alsoPrintln get()=this.also {println(it)}
 
 fun main()
 {
-	//	measureTime {
-	//		loxRuleHolder.transpile(
-	//			"var a = 4 * 4 * 4 * 4 * 4 * 4;",
-	//			::LoxLexer,
-	//			::LoxParser,
-	//			LoxParser::declaration
-	//		).code.alsoPrintln
-	//	}.alsoPrintln
 	val varF="x"
 
 	//The identity function for booleans.
@@ -81,7 +70,7 @@ fun main()
 		examples.map {
 			val str:String
 			measureTime {
-				str=tryT(stlcRuleHolder,it).code
+				str=KotlinEmitter().emitAst(tryT(stlcRuleHolder,it))
 			}.let {str to it}
 		}
 			.forEachIndexed {i,(it,time)-> println("${names[i]} [$time]: $it")}
@@ -134,10 +123,10 @@ fun main()
 			val charStream=CharStreams.fromString(src)
 			val lexer=LispLexer(charStream)
 			val tokenStream=CommonTokenStream(lexer)
-			val parser:LispParser=LispParser(tokenStream)
+			val parser=LispParser(tokenStream)
 			val tree=parser.lisp()
 			val visited=visitor.visit(tree)
-			val code=visited.code
+			val code=KotlinEmitter().emitAst(visited)
 			println(code)
 		}
 	}
@@ -149,7 +138,7 @@ fun main()
 			val parser=astrap(tokenStream)
 			val tree=parser.program()
 			val visited=AstralToKotlinMapper().visitProgram(tree)
-			val code=visited.code
+			val code=KotlinEmitter().emitKKotlinFile(visited)
 			println(code)
 			File("src/main/kotlin/gen/Stlc.kt") //.writeText(code)
 		}
@@ -158,30 +147,20 @@ fun main()
 	kclass("HelloWorld") {
 		classBody {
 			function("sortByLength") {
-				"strings" ofType "List".id.simpleGeneric("String").userType.type
-				blockBody {
-					+"strings".id.call(
+				"strings" ofType "List".id.simpleGeneric("String")
+				exprBody(
+					"strings".id["sortedWith".id].primary call
 						kobjectLiteral {
-							delegationSpecifiers(
-								"Comparator".id
-									.simpleGeneric("String")
-									.userType
-									.delegationSpecifier
-									.nel()
-									.let(::KDelegationSpecifiers)
-							)
-							body(
-								KClassBody(
-									kfun("compare") {
-										+EMemberModifier.Override
-										type("Int".type)
-										exprBody("a"["length".id]-"b"["length".id])
-									}.list
-								)
-							)
+							extends("Comparator".id.simpleGeneric("String"))
+							classBody {
+								function("compare") {
+									+EMemberModifier.Override
+									type("Int".type)
+									exprBody("a"["length".id]-"b"["length".id])
+								}.list
+							}
 						}
-					)
-				}
+				)
 			}
 		}
 
@@ -193,9 +172,20 @@ fun main()
 			})
 		  }
 		}
+		kclass("HelloWorld") {
+		  +kfun("sortByLength",("strings" ofType List.simpleGeneric("String"))) {
+			"string".id["sortedWith"].call(kobject(Comparator.simpleGeneric("String"){
+				kfun("compare") {
+				  +EMemberModifier.Override
+				  type("Int".type)
+				  exprBody("a"["length".id]-"b"["length".id])
+				}
+			})
+		  }
+		}
 		*/
 	}.also {
-		println(it.code)
+		println(KotlinEmitter().emitKClassDeclaration(it))
 	}
 	//	println(codegenExample().code)
 }
@@ -252,22 +242,18 @@ fun codegenExample()=kotlinFile {
 				stat(
 					"tasks"["isEmpty".id].primary.call() ifTrue
 							kblock {
-								+"println".id.call("Нет задач.".ast)
+								+("println".id call "Нет задач.".ast)
 								+kreturn
 							}
 				)
 				+"println".id.call("Список задач:".ast)
-				"tasks"["forEach".id].primary.call(
-					KLambdaLiteral(
-						"task".id.variableDecl.lambdaParams,
-						listOf(
-							"status".id.variableDecl.property(
-								"task"["isDone".id].ifElse("[✓]".ast.stat,"[ ]".ast.stat)
-							).stat,
-							"println".id.call(
-								"\$status \${task.id}: \${task.description}".ast
-							).stat
-						)
+				"tasks"["forEach".id].primary call KLambdaLiteral(
+					"task".id.variableDecl.lambdaParams,
+					listOf(
+						"status".id.variableDecl.property(
+							"task"["isDone".id].ifElse("[✓]".ast.stat,"[ ]".ast.stat)
+						).stat,
+						("println".id call "\$status \${task.id}: \${task.description}".ast).stat
 					)
 				)
 			}
@@ -377,6 +363,9 @@ fun KPrimaryExpression.call(vararg valueArgs:KValueArgument):KPostfixUnaryExpres
 fun KPrimaryExpression.call(vararg valueArgs:KExpression):KPostfixUnaryExpression=
 	call(valueArgs.map {it.valueArg}.toNonEmptyListOrNull() ?: error("No arguments"))
 
+infix fun KPrimaryExpression.call(valueArg:KExpression):KPostfixUnaryExpression=
+	call(valueArg.valueArg)
+
 infix fun KPrimaryExpression.call(valueArgs:NonEmptyList<KValueArgument>):KPostfixUnaryExpression=
 	call(valueArgs,None)
 
@@ -384,9 +373,12 @@ infix fun KPrimaryExpression.call(suffix:KCallSuffixInner):KPostfixUnaryExpressi
 	call(suffix,None)
 
 val KPrimaryExpression.incr:KPostfixUnaryExpression
-	get()=KPostfixUnaryExpression(this,KIncr.list)
+	get()=KPostfixUnaryExpression(this,KPostfixUnaryOperator.Incr.list)
 
-fun KExpression.getProp(prop:KNavigationSuffixInner,op:KMemberAccessOperator=KDot):KPostfixUnaryExpression=
+fun KExpression.getProp(
+	prop:KNavigationSuffixInner,
+	op:KMemberAccessOperator=KMemberAccessOperator.Dot
+):KPostfixUnaryExpression=
 	KPostfixUnaryExpression(
 		if(this is KPrimaryExpression) this else this.paren,
 		KNavigationSuffix(prop,op).list
@@ -398,7 +390,7 @@ operator fun KExpression.get(prop:KNavigationSuffixInner):KPostfixUnaryExpressio
 operator fun String.get(prop:KNavigationSuffixInner):KPostfixUnaryExpression=
 	id[prop]
 
-fun KExpression.getProp(prop:String,op:KMemberAccessOperator=KDot):KPostfixUnaryExpression=
+fun KExpression.getProp(prop:String,op:KMemberAccessOperator=KMemberAccessOperator.Dot):KPostfixUnaryExpression=
 	getProp(prop.id,op)
 
 val String.id get()=KIdentifierInner(this)

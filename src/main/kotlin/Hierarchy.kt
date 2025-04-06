@@ -1,11 +1,6 @@
-package org.fancryer.bf
 
-import arrow.core.const
-import java.lang.reflect.ParameterizedType
 import kotlin.reflect.KClass
 import kotlin.reflect.full.allSuperclasses
-import kotlin.reflect.jvm.javaType
-import kotlin.reflect.jvm.jvmErasure
 
 sealed interface Distance:Comparable<Distance>
 {
@@ -88,62 +83,3 @@ fun <T:Any,R:Any> compareClassesStrict(t:KClass<T>,r:KClass<R>)=println("$t ${if
 fun <T:Any,R:Any> compareClasses(t:Class<T>,r:Class<R>)=println("$t ${if(t==r) '=' else '!'}= $r")
 
 fun <T:Any,R:Any> compareClassesStrict(t:Class<T>,r:Class<R>)=println("$t ${if(t===r) '=' else '!'}== $r")
-
-fun <T:Any,R:Any> foo(t:KClass<T>,r:KClass<R>)
-{
-	buildString {
-		val tt=t.typeParameters.flatMap {
-			it.upperBounds
-		}.map {
-			"{${it.classifier} ${it.arguments} ${it.jvmErasure}}"
-		}
-
-		val rt=r.typeParameters.flatMap {
-			it.upperBounds
-		}.map {
-			it
-		}
-
-		when(val tj=t)
-		{
-			is ParameterizedType->
-			{
-				append(tj.actualTypeArguments)
-			}
-		}
-		append(tt)
-		append(" ${if(tt==rt) '=' else '!'}= ")
-		append(r.simpleName)
-		append(rt)
-	}.also(::println)
-	//println("${t} ${if(t==r) '=' else '!'}= $r")
-}
-
-fun main()
-{
-	val i:Any=listOf(1,2)
-	val j:Any=listOf("","")
-	compareClasses(i::class,j::class)
-	compareClasses(i::class.java,j::class.java)
-	compareClassesStrict(i::class,j::class)
-	compareClassesStrict(i::class.java,j::class.java)
-	foo(i::class,j::class)
-	//	val classes:(List<KClass<out A>>)=listOf(D::class,B::class,A::class,C::class,E::class)
-	//	val sortedClasses=sortClassesByDistanceTo(E::class,classes)
-	//
-	//	println(sortedClasses) // Выведет список отсортированный по "расстоянию" до E
-	//
-	//	classes.groupBy {distanceFromAncestor(E::class,it)}.toList().sortedByDescending {
-	//		it.first
-	//	}.also {println(it)}
-}
-
-/*
-[
-	(2147483647,
-		[class org.fancryer.bf.D,
-			class org.fancryer.bf.B]),
-	(2, [class org.fancryer.bf.A]),
-	(1, [class org.fancryer.bf.C]),
-	(0, [class org.fancryer.bf.E])]
-*/

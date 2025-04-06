@@ -2,8 +2,7 @@ package ast
 
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.ast.KotlinAst
-import org.fancryer.bf.ast.rules.InoutLogger
+import ast.rules.InoutLogger
 import org.fancryer.bf.pipe
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSuperclassOf

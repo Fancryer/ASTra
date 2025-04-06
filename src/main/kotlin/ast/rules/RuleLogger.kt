@@ -1,7 +1,7 @@
-package org.fancryer.bf.ast.rules
+package ast.rules
 
 import org.antlr.v4.runtime.tree.ParseTree
-import org.fancryer.bf.ast.KotlinAst
+import ast.KotlinAst
 
 interface InoutLogger<I,O,T>
 {
