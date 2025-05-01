@@ -1,5 +1,7 @@
 package emitter
 
+import arrow.core.NonEmptyList
+import arrow.core.toNonEmptyListOrNone
 import ast.*
 
 class KotlinEmitter:CodeEmitter<String>
@@ -21,13 +23,13 @@ class KotlinEmitter:CodeEmitter<String>
 
 	override fun emitKFunctionDeclaration(node:KFunctionDeclaration):String=node.run {
 		buildString {
-			modifiers.onSome {
+			modifiers.toNonEmptyListOrNone().onSome {
 				append(emitKModifiers(it))
 				append(' ')
 			}
 			append("fun ")
-			typeParameters.onSome {
-				append(emitKTypeParameters(it))
+			typeParameters.toNonEmptyListOrNone().onSome {
+				append(it.joinToString(", ","<",">") {emitKTypeParameter(it)})
 				append(' ')
 			}
 			receiverType.onSome {
@@ -43,8 +45,9 @@ class KotlinEmitter:CodeEmitter<String>
 				append(emitKType(it))
 				append(' ')
 			}
-			typeConstraints.onSome {
-				append(emitKTypeConstraints(it))
+			if(typeConstraints.isNotEmpty())
+			{
+				append(typeConstraints.joinToString(", ","where "," ") {emitKTypeConstraint(it)})
 			}
 			functionBody.onSome {
 				append(emitKFunctionBody(it))
@@ -52,8 +55,64 @@ class KotlinEmitter:CodeEmitter<String>
 		}
 	}
 
+	override fun emitKWhenExpression(node:KWhenExpression):String=buildString {
+		//'when' whenSubject? '{' whenEntry* '}'
+		append("when")
+		node.subject.onSome {
+			append(emitKWhenSubject(it))
+		}
+		append('{')
+		node.entries.forEach {
+			append(emitKWhenEntry(it))
+		}
+		append('}')
+	}
+
+	override fun emitKWhenEntry(node:KWhenEntry):String=when(node)
+	{
+		is KWhenElseEntry->emitKWhenElseEntry(node)
+		is KWhenEntryWithConditions->emitKWhenEntryWithConditions(node)
+	}
+
+	override fun emitKWhenEntryWithConditions(node:KWhenEntryWithConditions):String=buildString {
+		append(node.conditions.joinToString {
+			emitKWhenCondition(it)
+		})
+		append(" -> ")
+		append(emitKControlStructureBody(node.body))
+		append(';')
+	}
+
+	override fun emitKWhenCondition(node:KWhenCondition):String=when(node)
+	{
+		is KExpression->emitKExpression(node)
+		is KRangeTest->emitKRangeTest(node)
+		is KTypeTest->emitKTypeTest(node)
+	}
+
+	override fun emitKTypeTest(node:KTypeTest):String=
+		emitEIsOperator(node.left)+emitKType(node.right)
+
+	override fun emitEIsOperator(node:EIsOperator):String=when(node)
+	{
+		EIsOperator.Is->"is"
+		EIsOperator.NotIs->"!is"
+	}
+
+	override fun emitKWhenElseEntry(node:KWhenElseEntry):String=
+		"else -> ${emitKControlStructureBody(node.body)};"
+
+	override fun emitKWhenSubject(node:KWhenSubject):String=buildString {
+		append('(')
+		node.decl.onSome {
+			append(emitKVariableDeclarationWithAnnotations(it))
+		}
+		append(emitKExpression(node.expression))
+		append(')')
+	}
+
 	override fun emitKFunctionAssignExpression(node:KFunctionAssignExpression):String=
-		emitKExpression(node.expression)
+		"= ${emitKExpression(node.expression)}"
 
 	override fun emitKVariableDeclaration(node:KVariableDeclaration):String=buildString {
 		node.annotations.forEach {
@@ -69,13 +128,13 @@ class KotlinEmitter:CodeEmitter<String>
 
 	override fun emitKPropertyDeclaration(node:KPropertyDeclaration):String=buildString {
 		node.run {
-			modifiers.onSome {
+			modifiers.toNonEmptyListOrNone().onSome {
 				append(emitKModifiers(it))
 				append(' ')
 			}
 			append(if(isVal) "val " else "var ")
-			typeParameters.onSome {
-				append(emitKTypeParameters(it))
+			typeParameters.toNonEmptyListOrNone().onSome {
+				append(it.joinToString(", ","<",">") {emitKTypeParameter(it)})
 				append(' ')
 			}
 			recieverType.onSome {
@@ -84,9 +143,9 @@ class KotlinEmitter:CodeEmitter<String>
 			}
 			append(emitKMultiOrSingleVariableDeclaration(declaration))
 			append(' ')
-			typeConstraints.onSome {
-				append(emitKTypeConstraints(it))
-				append(' ')
+			if(typeConstraints.isNotEmpty())
+			{
+				append(typeConstraints.joinToString(", ","where "," ") {emitKTypeConstraint(it)})
 			}
 			append(if(byDelegate) "by " else "= ")
 			append(emitKExpression(expr))
@@ -150,23 +209,28 @@ class KotlinEmitter:CodeEmitter<String>
 
 	override fun emitKClassDeclaration(node:KClassDeclaration):String=buildString {
 		node.run {
-			modifiers.onSome {
-				append(emitKModifiers(it)).append(' ')
+			modifiers.toNonEmptyListOrNone().onSome {
+				append(emitKModifiers(it))
+				append(' ')
 			}
 			append(emitKClassHeaderType(classHeaderType))
 			append(' ')
 			append(emitKSimpleIdentifier(identifier))
-			append(typeParameters.fold({" "}) {
-				emitKTypeParameters(it)
-			})
+			append(' ')
+			typeParameters.toNonEmptyListOrNone().onSome {
+				append(it.joinToString(", ","<",">") {emitKTypeParameter(it)})
+				append(' ')
+			}
 			primaryConstructor.onSome {
 				append(emitKPrimaryConstructor(it))
 			}
 			delegationSpecifiers.onSome {
+				append(':')
 				append(emitKDelegationSpecifiers(it))
 			}
-			typeConstraints.onSome {
-				emitKTypeConstraints(it)
+			if(typeConstraints.isNotEmpty())
+			{
+				append(typeConstraints.joinToString(", ","where ") {emitKTypeConstraint(it)})
 			}
 			append(emitKClassOrEnumBody(body))
 		}
@@ -237,11 +301,8 @@ class KotlinEmitter:CodeEmitter<String>
 		append('}')
 	}
 
-	override fun emitKAdditiveExpression(node:KAdditiveExpression):String=
-		"${emitKExpression(node.left)} ${emitKAdditiveOperator(node.op)} ${emitKExpression(node.right)}"
-
-	override fun emitKMultiplicativeExpression(node:KMultiplicativeExpression):String=
-		"${emitKExpression(node.left)} ${emitKMultiplicativeOperator(node.op)} ${emitKExpression(node.right)}"
+	override fun emitKBinaryExpression(node:KBinaryExpression):String=
+		"${emitKExpression(node.left)} ${emitKBinaryOperator(node.op)} ${emitKExpression(node.right)}"
 
 	override fun emitKPostfixUnaryExpression(node:KPostfixUnaryExpression):String=buildString {
 		append(emitKPrimaryExpression(node.primaryExpression))
@@ -342,8 +403,9 @@ class KotlinEmitter:CodeEmitter<String>
 				append(':')
 				append(emitKType(it))
 			}
-			constraints.onSome {
-				append(emitKTypeConstraints(it))
+			if(constraints.isNotEmpty())
+			{
+				append(constraints.joinToString(", ","where ") {emitKTypeConstraint(it)})
 			}
 			body.onSome {
 				append(emitKFunctionBody(it))
@@ -379,8 +441,8 @@ class KotlinEmitter:CodeEmitter<String>
 
 	override fun emitKExcl(node:KExcl):String="!"
 
-	override fun emitKModifiers(node:KModifiers):String=
-		node.mods.joinToString(" ") {emitKModifiersInner(it)}
+	fun emitKModifiers(node:NonEmptyList<KModifiersInner>):String=
+		node.joinToString(" ") {emitKModifiersInner(it)}
 
 	override fun emitEClassModifier(node:EClassModifier):String=node.toString().lowercase()
 
@@ -414,11 +476,13 @@ class KotlinEmitter:CodeEmitter<String>
 	}
 
 	override fun emitKClassParameter(node:KClassParameter):String=buildString {
-		node.modifiers.onSome {
-			emitKModifiers(it)
+		node.modifiers.toNonEmptyListOrNone().onSome {
+			append(emitKModifiers(it))
 			append(' ')
 		}
-		append(if(node.isVal) "val " else "var ")
+		node.isVal.onSome {
+			append(if(it) "val " else "var ")
+		}
 		append(emitKSimpleIdentifier(node.identifier))
 		append(": ")
 		append(emitKType(node.type))
@@ -441,10 +505,85 @@ class KotlinEmitter:CodeEmitter<String>
 		"import ${emitKIdentifier(node.identifier)} as ${emitKSimpleIdentifier(node.alias)}"
 
 	override fun emitKPrimaryConstructor(node:KPrimaryConstructor):String=buildString {
-		node.modifiers.onSome {
-			emitKModifiers(it)
+		node.modifiers.toNonEmptyListOrNone().onSome {
+			append(emitKModifiers(it))
 			append(' ')
 		}
-		append(node.classParameters.joinToString("","(",")") {emitKClassParameter(it)})
+		append(node.classParameters.joinToString(", ","(",")") {emitKClassParameter(it)})
 	}
+
+	override fun emitEBooleanLiteral(node:EBooleanLiteral):String=
+		if(node==EBooleanLiteral.True) "true" else "false"
+
+	override fun emitKMemberAccessOperator(node:KMemberAccessOperator):String=when(node)
+	{
+		KMemberAccessOperator.Dot->"."
+		KMemberAccessOperator.SafeNav->"?."
+		KMemberAccessOperator.ColonColon->"::"
+	}
+
+	override fun emitKBinaryOperator(node:KBinaryOperator):String=when(node)
+	{
+		KAdditiveOperator.Add->"+"
+		KAdditiveOperator.Sub->"-"
+		KMultiplicativeOperator.Mult->"*"
+		KMultiplicativeOperator.Div->"/"
+		KMultiplicativeOperator.Mod->"%"
+	}
+
+	override fun emitKLineStrRef(node:KLineStrRef):String=emitKFieldIdentifier(node.ref)
+
+	override fun emitKFieldIdentifier(node:KFieldIdentifier):String="\$${emitKSimpleIdentifier(node.id)}"
+
+	override fun emitKComparison(node:KComparison):String=
+		"${emitKExpression(node.left)} ${emitEComparisonOperator(node.op)} ${emitKExpression(node.right)}"
+
+	override fun emitEComparisonOperator(node:EComparisonOperator):String=when(node)
+	{
+		EComparisonOperator.Gt->">"
+		EComparisonOperator.Lt->"<"
+		EComparisonOperator.Le->"<="
+		EComparisonOperator.Ge->">="
+	}
+
+	override fun emitEAssignmentAndOperator(node:EAssignmentAndOperator):String=when(node)
+	{
+		EAssignmentAndOperator.AddAssignment->"+="
+		EAssignmentAndOperator.SubAssignment->"-="
+		EAssignmentAndOperator.MultAssignment->"*="
+		EAssignmentAndOperator.DivAssignment->"/="
+		EAssignmentAndOperator.ModAssignment->"%="
+	}
+
+	override fun emitKAssignment(node:KAssignment):String=
+		"${emitKAssignmentLeft(node.left)} ${emitKExpression(node.right)}"
+
+	override fun emitKAssignableWithAndExpression(node:KAssignableWithAndExpression):String=
+		"${emitKAssignableExpression(node.left)} ${emitEAssignmentAndOperator(node.right)}"
+
+	override fun emitKParenthesizedDirectlyAssignableExpression(node:KParenthesizedDirectlyAssignableExpression):String=
+		"(${emitKDirectlyAssignableExpression(node.directlyAssignableExpression)})"
+
+	override fun emitKPrefixUnaryExpression(node:KPrefixUnaryExpression):String=
+		node.prefixes.joinToString("") {emitKUnaryPrefix(it)}+
+		emitKPostfixUnaryExpression(node.expression)
+
+	override fun emitKConstructorInvocation(node:KConstructorInvocation):String=
+		"${emitKUserType(node.userType)}${emitKValueArguments(node.valueArguments)}"
+
+	override fun emitKLineStringExpression(node:KLineStringExpression):String=
+		"\${${emitKExpression(node.expression)}}"
+
+	override fun emitKWhileStatement(node:KWhileStatement):String=buildString {
+		append("while(")
+		append(emitKExpression(node.expression))
+		append(')')
+		append(emitKControlStructureBodyOrSemicolon(node.body))
+	}
+
+	override fun emitKConjunction(node:KConjunction):String=
+		"${emitKExpression(node.left)}&&${emitKExpression(node.right)}"
+
+	override fun emitKDisjunction(node:KDisjunction):String=
+		"${emitKExpression(node.left)}||${emitKExpression(node.right)}"
 }

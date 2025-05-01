@@ -5,8 +5,8 @@ import ast.*
 import ast.KPropertyDeclarationBuilder.Companion.kpropertyDeclaration
 import astra.astrap.*
 import astra.astrapBaseVisitor
-import org.fancryer.bf.call
 import org.fancryer.bf.id
+import org.fancryer.bf.invoke
 import org.fancryer.bf.list
 import org.fancryer.bf.valueArg
 
@@ -22,7 +22,7 @@ class AstralToKotlinMapper:astrapBaseVisitor<KotlinAst>()
 		val rules=ctx.rule_().map(::visitRule_)
 		val holder=kpropertyDeclaration {
 			declaration(KVariableDeclaration(identifier="${grammarName}_RuleHolder".id))
-			"rules".id.call(
+			"rules".id(
 				KLambdaLiteral(
 					stats=rules.map {KStatement(stat=it)}
 				).valueArg.nel(),
@@ -74,7 +74,7 @@ class AstralToKotlinMapper:astrapBaseVisitor<KotlinAst>()
 		val ctxName=ctx.ctx_name?.let(::visitName)
 		return kpropertyDeclaration {
 			declaration(ruleName.variableDecl)
-			"rule".id.call(
+			"rule".id(
 				args=nonEmptyListOf(
 					KConcreteTypeProjection(fromType),
 					KConcreteTypeProjection(toType)

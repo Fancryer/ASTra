@@ -1,15 +1,15 @@
 package ast
 
-import arrow.core.None
-import arrow.core.Option
-import arrow.core.toOption
 import ast.KClassParameterBuilder.Companion.kclassParameter
 import org.fancryer.bf.id
 
+annotation class KPrimaryConstructorDsl
+
+@KPrimaryConstructorDsl
 class KPrimaryConstructorBuilder
 {
 	private var classParameters:(List<KClassParameter>)=emptyList()
-	private var modifiers:KModifiers?=null
+	private var modifiers:(List<KModifiersInner>)=emptyList()
 
 	fun param(id:KSimpleIdentifier,init:KClassParameterBuilder.()->Unit)=
 		kclassParameter(id,init).also {classParameters+=it}
@@ -30,7 +30,7 @@ class KPrimaryConstructorBuilder
 		this ofType type.type
 
 
-	private fun build()=KPrimaryConstructor(classParameters,modifiers.toOption())
+	private fun build()=KPrimaryConstructor(classParameters,modifiers)
 
 	companion object
 	{
@@ -41,5 +41,5 @@ class KPrimaryConstructorBuilder
 
 data class KPrimaryConstructor(
 	val classParameters:List<KClassParameter>,
-	val modifiers:(Option<KModifiers>)=None
+	val modifiers:(List<KModifiersInner>)=emptyList()
 ):KotlinAst

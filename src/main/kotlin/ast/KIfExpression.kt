@@ -20,3 +20,6 @@ fun KExpression.ifElse(ifTrue:KControlStructureBody,ifFalse:KControlStructureBod
 infix fun KExpression.ifTrue(ifTrue:KControlStructureBody):KIfExpression=
 	ifElse(ifTrue,KSemicolon)
 
+fun branch(pred:KExpression,ifTrue:KControlStructureBody,ifFalse:KControlStructureBodyOrSemicolon):KIfExpression=
+	pred.ifElse(ifTrue,ifFalse)
+

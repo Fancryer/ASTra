@@ -1,20 +1,17 @@
 package ast
 
-import arrow.core.*
+import arrow.core.Option
+import arrow.core.none
+import arrow.core.some
+import ast.rules.InoutLoggerImpl
 import org.antlr.v4.runtime.Lexer
 import org.antlr.v4.runtime.Parser
 import org.antlr.v4.runtime.tree.ParseTree
-import ast.rules.InoutLoggerImpl
 
 class RuleHolderBuilder<LT:Lexer,PT:Parser>
 {
 	private var defaultRule:(Option<DefaultRule<LT,PT>>)=none()
 	val rules=mutableListOf<TranspilationRule<out ParseTree,out KotlinAst>>()
-//	val logger:(InoutLogger<out ParseTree,out KotlinAst,Int>)=
-//		InoutLoggerImpl(
-//			{it::class.simpleName?.run {length>15} ?: false},
-//			{it::class.simpleName?.run {length>15} ?: false}
-//		)
 
 	fun default(init:(ParseTree)->KotlinAst)
 	{

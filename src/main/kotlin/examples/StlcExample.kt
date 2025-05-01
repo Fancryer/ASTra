@@ -1,6 +1,5 @@
 package examples
 
-import arrow.core.nel
 import ast.*
 import org.fancryer.bf.*
 import stlc.gen.StlcLexer
@@ -14,11 +13,11 @@ inline infix fun <reified T:Any,reified R:Any> T.castOr(r:(T)->R):R=
 val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 	default {
 		println("default for ${it::class.simpleName}")
-		"TODO".id.call()
+		"TODO".id()
 	}
 
 	val rX=
-		rule<XContext,KSimpleIdentifier>("x") {
+		rule("x") {
 			from(XContext::class)
 			how {ctx:XContext-> ctx.ID().text.id}
 		}
@@ -58,8 +57,8 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 				val tToExp=lookup<TContext,KExpression>()
 						   ?: error("ASTra doesn't know how to get KExpression from T")
 				tToExp(ctx.pred).ifElse(
-					tToExp(ctx.if_true).block,
-					tToExp(ctx.if_false).block
+					tToExp(ctx.if_true).stat,
+					tToExp(ctx.if_false).stat
 				)
 			}
 		}
@@ -93,7 +92,7 @@ val stlcRuleHolder=rules<StlcLexer,StlcParser> {
 				from(ApplicationContext::class)
 				how {ctx->
 					val exp=ctx.t(1)
-					ctx.t(0).let(rT).primary call rT(exp).valueArg.nel()
+					ctx.t(0).let(rT)(rT(exp))
 				}
 			}
 

@@ -32,8 +32,7 @@ s_expression:
 val lispRuleHolder=rules<LispLexer,LispParser> {
 
 	default {
-		println("default for ${it::class.simpleName}")
-		"TODO".id call KLineStringLiteral().valueArg.args
+		"TODO".id(KLineStringLiteral().valueArg.args)
 	}
 
 	val rLisp=
@@ -97,7 +96,7 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 
 												kfun(name) {
 													valueParameters(args)
-													type(funType)
+													returns(funType)
 													bodyExp(sexp(exp[0]))
 												}
 											}
@@ -233,7 +232,7 @@ val lispRuleHolder=rules<LispLexer,LispParser> {
 									else->tail.map(rSexp)
 										.map(KExpression::valueArg)
 										.toNonEmptyListOrNull()!!
-										.let(expr::call)
+										.let(expr::invoke)
 								}
 
 							else->TODO()

@@ -1,7 +1,6 @@
 package ast
 
-import arrow.core.Option
-import arrow.core.toOption
+import arrow.core.*
 import ast.KClassParameterBuilder.Companion.kclassParameter
 import org.fancryer.bf.id
 
@@ -38,18 +37,30 @@ class KClassParametersBuilder
 
 class KClassParameterBuilder(id:KSimpleIdentifier)
 {
-	private var modifiers:KModifiers?=null
-	private var isVal:Boolean=true
+	private var modifiers:(List<KModifiersInner>)=emptyList()
+	private var _isVal:(Option<Boolean>)=Some(true)
 	private var identifier:KSimpleIdentifier=id
 	private var type:KType?=null
 	private var expression:KExpression?=null
 
 	constructor(id:String):this(id.id)
 
-	operator fun KModifiers.unaryPlus()
+	operator fun KModifiersInner.unaryPlus()
 	{
-		modifiers=this
+		modifiers+=this
 	}
+
+	val notMine:Unit
+		get()
+		{
+			_isVal=None
+		}
+
+	val valueParam:Unit
+		get()
+		{
+			notMine
+		}
 
 	fun type(type:KType)
 	{
@@ -60,7 +71,7 @@ class KClassParameterBuilder(id:KSimpleIdentifier)
 
 	operator fun KType.unaryPlus()
 	{
-		type=this
+		type(this)
 	}
 
 	fun expression(expression:KExpression)
@@ -70,27 +81,27 @@ class KClassParameterBuilder(id:KSimpleIdentifier)
 
 	operator fun KExpression.unaryPlus()
 	{
-		expression=this
+		expression(this)
 	}
 
 	fun isVal(isVal:Boolean)
 	{
-		this.isVal=isVal
+		this._isVal=isVal.some()
 	}
 
-	fun isVal()
+	val isVal:Unit get()
 	{
-		isVal=true
+		_isVal=true.some()
 	}
 
-	fun isVar()
+	val isVar:Unit get()
 	{
-		isVal=false
+		_isVal=false.some()
 	}
 
 	private fun build()=KClassParameter(
-		modifiers.toOption(),
-		isVal,
+		modifiers,
+		_isVal,
 		identifier,
 		type ?: error("type must be defined"),
 		expression.toOption()
@@ -107,8 +118,8 @@ class KClassParameterBuilder(id:KSimpleIdentifier)
 }
 
 data class KClassParameter(
-	val modifiers:Option<KModifiers>,
-	val isVal:Boolean,
+	val modifiers:List<KModifiersInner>,
+	val isVal:Option<Boolean>, //When none, it is value-parameter
 	val identifier:KSimpleIdentifier,
 	val type:KType,
 	val expression:Option<KExpression>

@@ -6,3 +6,4 @@ include("src:main:ast")
 findProject(":src:main:ast")?.name = "ast"
 include("src:ast")
 findProject(":src:ast")?.name = "ast"
+include("ast")

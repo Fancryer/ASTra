@@ -9,4 +9,5 @@ class KIdentifierInner(name:String):KSimpleIdentifier
 {
 	val name=name //if(name.matches(Regex(""))) name else error("Bad identifier: $name")
 	override val id:String=name
+	override fun toString():String=name
 }

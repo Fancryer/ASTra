@@ -3,31 +3,29 @@ package ast
 import arrow.core.nel
 import arrow.core.toNonEmptyListOrNone
 import arrow.core.toOption
+import ast.DelegationSpecifiersBuilder.Companion.kdelegationSpecifiers
 import ast.KClassBodyBuilder.Companion.kclassBody
 import org.fancryer.bf.id
 
 class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 {
-	private var modifiers:KModifiers?=null
+	private var modifiers:(List<KModifiersInner>)=emptyList()
 	private var classHeaderType:KClassHeaderType=KClassKeyword
-	private var typeParameters:KTypeParameters?=null
+	private var typeParameters:(List<KTypeParameter>)=emptyList()
 	private var primaryConstructor:KPrimaryConstructor?=null
 	private var delegationSpecifiers:KDelegationSpecifiers?=null
-	private var typeConstraints:KTypeConstraints?=null
+	private var typeConstraints:(List<KTypeConstraint>)=emptyList()
 	private var body:KClassOrEnumBody?=null
 
 	operator fun KModifiersInner.unaryPlus()
 	{
-		when(val mods=modifiers)
-		{
-			null->modifiers=KModifiers(nel())
-			else->KModifiers(mods.mods+this)
-		}
+		if(modifiers.isEmpty()) modifiers=nel()
+		else modifiers=modifiers+this
 	}
 
-	fun modifiers(modifiers:KModifiers)
+	fun modifiers(modifiers:List<KModifiersInner>)
 	{
-		this.modifiers=modifiers
+		this.modifiers+=modifiers
 	}
 
 	fun header(headerType:KClassHeaderType)
@@ -35,7 +33,7 @@ class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 		classHeaderType=headerType
 	}
 
-	fun typeParams(params:KTypeParameters)
+	fun typeParams(params:List<KTypeParameter>)
 	{
 		typeParameters=params
 	}
@@ -53,7 +51,12 @@ class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 		delegationSpecifiers=specifiers
 	}
 
-	fun typeConstraints(constraints:KTypeConstraints)
+	fun delegationSpecifiers(init:DelegationSpecifiersBuilder.()->Unit)
+	{
+		delegationSpecifiers=kdelegationSpecifiers(init)
+	}
+
+	fun typeConstraints(constraints:List<KTypeConstraint>)
 	{
 		typeConstraints=constraints
 	}
@@ -70,13 +73,13 @@ class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 		KEnumClassBodyBuilder.kenumClassBody(init).also {body=it}
 
 	private fun build()=KClassDeclaration(
-		modifiers.toOption(),
+		modifiers,
 		classHeaderType,
 		name,
-		typeParameters.toOption(),
+		typeParameters,
 		primaryConstructor.toOption(),
 		delegationSpecifiers.toOption(),
-		typeConstraints.toOption(),
+		typeConstraints,
 		body ?: classBody {}
 	)
 
@@ -84,7 +87,7 @@ class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 	{
 		fun kclass(
 			name:KSimpleIdentifier,
-			vararg mods:EClassModifier,
+			vararg mods:KModifier,
 			init:KClassDeclarationBuilder.()->Unit
 		):KClassDeclaration=
 			KClassDeclarationBuilder(name).apply {
@@ -92,11 +95,13 @@ class KClassDeclarationBuilder(private var name:KSimpleIdentifier)
 				mods.toList()
 					.toNonEmptyListOrNone()
 					.onSome {
-						modifiers(KModifiers(it))
+						modifiers(it)
 					}
 			}.build()
 
-		fun kclass(name:String,vararg mods:EClassModifier,init:KClassDeclarationBuilder.()->Unit):KClassDeclaration=
+		fun kclass(name:String,vararg mods:KModifier,init:KClassDeclarationBuilder.()->Unit):KClassDeclaration=
 			kclass(name.id,*mods,init=init)
+
+		infix fun KSimpleIdentifier.kclass(init:KClassDeclarationBuilder.()->Unit)=kclass(this,init=init)
 	}
 }

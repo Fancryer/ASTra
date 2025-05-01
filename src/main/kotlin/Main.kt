@@ -2,12 +2,16 @@ package org.fancryer.bf
 
 import arrow.core.*
 import ast.*
-import ast.KBlockBuilder.Companion.kblock
+import ast.EMemberModifier.Lateinit
+import ast.EMemberModifier.Override
+import ast.FunctionDeclarationBuilder.Companion.kfun
+import ast.KAssignment.Companion.subAssign
 import ast.KClassDeclarationBuilder.Companion.kclass
-import ast.KObjectLiteralBuilder.Companion.kobjectLiteral
-import ast.KPropertyDeclaration.Companion.property
 import ast.KPropertyDeclarationBuilder.Companion.kval
+import ast.KWhenExpressionBuilder.Companion.kwhen
+import ast.KWhileStatement.Companion.kwhile
 import ast.KotlinFileBuilder.Companion.kotlinFile
+import ast.LineStringLiteralBuilder.Companion.stringLiteral
 import astra.astra
 import astra.astrap
 import emitter.KotlinEmitter
@@ -26,7 +30,7 @@ import kotlin.time.measureTime
 fun call(expr:KPrimaryExpression,suffix:KPostfixUnarySuffix)=
 	KPostfixUnaryExpression(expr,listOf(suffix))
 
-val <T> T?.alsoPrintln get()=this.also {println(it)}
+val <T> T.alsoPrintln get()=this.also {println(it)}
 
 fun main()
 {
@@ -70,7 +74,7 @@ fun main()
 		examples.map {
 			val str:String
 			measureTime {
-				str=KotlinEmitter().emitAst(tryT(stlcRuleHolder,it))
+				str=KotlinEmitter().emitKExpression(tryT(stlcRuleHolder,it))
 			}.let {str to it}
 		}
 			.forEachIndexed {i,(it,time)-> println("${names[i]} [$time]: $it")}
@@ -78,17 +82,21 @@ fun main()
 		println("Stlc lexed, parsed and transpiled in $it")
 	}
 
-	/*
-	let x = 10 in
-	let square = fun n -> n * n in
-	square x
+	val declaration1=kval("x") {
+		+Lateinit // import EMemberModifier.Lateinit
+		+Override // import EMemberModifier.Override
+		isVar
+		+10.ast
+	}
 
-	(let x 10 (
-	  let square (lambda n (* n n)) (
-	    square x
-	  )
-	))
-	*/
+	// Объявления равнозначны
+
+	val declaration2=kval("x") {
+		mods(Lateinit,Override)
+		isVal(false)
+		expr(10.ast)
+	}
+
 	val src="""
     (let
       x
@@ -125,9 +133,13 @@ fun main()
 			val tokenStream=CommonTokenStream(lexer)
 			val parser=LispParser(tokenStream)
 			val tree=parser.lisp()
+			println("[[[")
 			val visited=visitor.visit(tree)
+			println(visited)
+			println("|||")
 			val code=KotlinEmitter().emitAst(visited)
 			println(code)
+			println("]]]")
 		}
 	}
 	measureTime {
@@ -144,157 +156,188 @@ fun main()
 		}
 	}
 
-	kclass("HelloWorld") {
-		classBody {
-			function("sortByLength") {
-				"strings" ofType "List".id.simpleGeneric("String")
-				exprBody(
-					"strings".id["sortedWith".id].primary call
-						kobjectLiteral {
-							extends("Comparator".id.simpleGeneric("String"))
-							classBody {
-								function("compare") {
-									+EMemberModifier.Override
-									type("Int".type)
-									exprBody("a"["length".id]-"b"["length".id])
-								}.list
-							}
-						}
-				)
-			}
-		}
+	KotlinEmitter().emitKExpression(
+		KWhenExpression(
+			KWhenSubject(expression="x".id).some(),
+			listOf(
+				KWhenEntryWithConditions(
+					KTypeTest(EIsOperator.Is,"Int".type).nel(),
+					"Int".ast.stat
+				),
+				KWhenEntryWithConditions(
+					KTypeTest(EIsOperator.Is,"String".type).nel(),
+					"String".ast.stat
+				),
+				KWhenElseEntry("Unknown".ast.stat)
+			)
+		)
+	).alsoPrintln
 
-		/*
-		class HelloWorld {
-		  fun sortByLength(strings: List<String>) {
-			strings.sortedWith(object : Comparator<String> {
-			  override fun compare(a: String, b: String): Int = a.length - b.length
-			})
-		  }
+	KotlinEmitter().emitKExpression(
+		kwhen("x".id) {
+			"Int".type caseIs "Int".ast
+			"String".type caseIs "String".ast
+			"Unknown".ast.stat.caseElse
 		}
-		kclass("HelloWorld") {
-		  +kfun("sortByLength",("strings" ofType List.simpleGeneric("String"))) {
-			"string".id["sortedWith"].call(kobject(Comparator.simpleGeneric("String"){
-				kfun("compare") {
-				  +EMemberModifier.Override
-				  type("Int".type)
-				  exprBody("a"["length".id]-"b"["length".id])
+	).alsoPrintln
+
+	kotlinFile {
+		+kclass("Character",EInheritanceModifier.Abstract) {
+			primaryConstructor {
+				"name" ofType "String"
+				"health" init {
+					isVar
+					type("Int")
 				}
-			})
-		  }
-		}
-		*/
-	}.also {
-		println(KotlinEmitter().emitKClassDeclaration(it))
-	}
-	//	println(codegenExample().code)
-}
-
-fun codegenExample()=kotlinFile {
-	nonEmptyListOf("java".id,"util".id).let(::KIdentifier)
-		.let(KImportHeader::KWildcardImport)
-		.also(::import)
-
-	+kclass("Task",EClassModifier.Data) {
-		+EClassModifier.Data
-		primaryConstructor {
-			"id" ofType "Int"
-			"description" ofType "String"
-			"isDone" init {
-				isVar()
-				type("Boolean")
-				expression(false.ast)
 			}
-		}
-	}
+			classBody {
+				function("attack") {
+					+EInheritanceModifier.Abstract
+					"target" ofType "Character"
+				}
+				function("isAlive") {
+					returns("Boolean".type)
+					exprBody("health".id greater 0.ast)
+				}
+				function("takeDamage") {
+					+EInheritanceModifier.Open
+					"amount" ofType "Int"
+					blockBody {
+						+"health".id.subAssign("amount".id)
+						+"println".id(
+							stringLiteral {
+								ref("name")
+								text(" получил ")
+								ref("amount")
+								text(" урона. Осталось ")
+								ref("health")
+								text(" HP.")
+							}
+						)
+						+"health".id
+							.lessEq(0.ast)
+							.ifTrue("println".id("\$name пал в бою...".ast).stat)
 
-	+kclass("TaskManager") {
-		classBody {
-			+kval("tasks") {
-				isPrivate
-				expr(
-					"mutableListOf".id.call(
-						"Task".type.proj.nel().typeArgs.some()
-					)
-				)
-			}
-			+kval("nextId") {
-				isPrivate
-				isVal(false)
-				expr(1.ast)
-			}
-			/*
-			private var nextId=1
-			 */
-			function("addTask") {
-				+KFunctionValueParameter(
-					parameter="description".id param "String".type
-				)
-				blockBody {
-					+kval("task") {
-						"Task".id.call("nextId".id.incr,"description".id).expr
 					}
-					+"tasks"["add".id].primary.call("task".id)
-					+"println".id.call("Задача добавлена: \$task".ast)
 				}
 			}
-			"listTasks" funBlock {
-				stat(
-					"tasks"["isEmpty".id].primary.call() ifTrue
-							kblock {
-								+("println".id call "Нет задач.".ast)
-								+kreturn
-							}
-				)
-				+"println".id.call("Список задач:".ast)
-				"tasks"["forEach".id].primary call KLambdaLiteral(
-					"task".id.variableDecl.lambdaParams,
-					listOf(
-						"status".id.variableDecl.property(
-							"task"["isDone".id].ifElse("[✓]".ast.stat,"[ ]".ast.stat)
-						).stat,
-						("println".id call "\$status \${task.id}: \${task.description}".ast).stat
-					)
-				)
-			}
-			/*
-			fun listTasks()
-			{
-				if(tasks.isEmpty())
-				{
-					println("Нет задач.")
-					return
-				}
-				println("Список задач:")
-				tasks.forEach {task->
-					val status=if(task.isDone) "[✓]" else "[ ]"
-					println("$status ${task.id}: ${task.description}")
-				}
-			}
-			*/
 		}
-	}
+
+		+kclass("Hero") {
+			primaryConstructor {
+				"name" init {
+					notMine
+					type("String")
+				}
+				"health" init {
+					notMine
+					type("Int")
+				}
+				"power" ofType "Int"
+			}
+			delegationSpecifiers {
+				"Character".id.simpleUserType.userType constructorInvocation
+						listOf("name".id.valueArg,"health".id.valueArg)
+			}
+			classBody {
+				function("attack") {
+					+Override
+					"target" ofType "Character"
+					blockBody {
+						+"println".id(
+							stringLiteral {
+								ref("name")
+								text(" атакует ")
+								expr("target".id["name".id])
+								text("!")
+							}
+						)
+						+"target"["takeDamage".id]("power".id)
+					}
+				}
+			}
+		}
+
+		+kclass("Monster") {
+			primaryConstructor {
+				"name" init {
+					notMine
+					type("String")
+				}
+				"health" init {
+					notMine
+					type("Int")
+				}
+				"damage" ofType "Int"
+			}
+			delegationSpecifiers {
+				"Character".id.simpleUserType.userType constructorInvocation
+						listOf("name".id.valueArg,"health".id.valueArg)
+			}
+			classBody {
+				function("attack") {
+					+Override
+					"target" ofType "Character"
+					blockBody {
+						+"println".id(
+							stringLiteral {
+								ref("name")
+								text(" кусает ")
+								expr("target".id["name".id])
+								text("!")
+							}
+						)
+						+"target"["takeDamage".id]("damage".id)
+					}
+				}
+			}
+		}
+
+		+kfun("main") {
+			blockBody {
+				+kval("hero","Hero".id("Алиса".ast,100.ast,20.ast))
+				+kval("goblin","Monster".id("Гоблин".ast,100.ast,20.ast))
+
+				+"println".id("⚔️ Битва начинается!".ast)
+
+				+("hero"["isAlive".id]() and "goblin"["isAlive".id]()).kwhile {
+					+"hero"["attack".id]("goblin".id)
+					+"goblin"["isAlive".id]().ifTrue("goblin"["attack".id]("hero".id).stat)
+					+"println".id()
+				}
+
+				+"println".id("🏁 Битва окончена!".ast)
+			}
+		}
+	}.alsoPrintln
+		.let(KotlinEmitter()::emitKKotlinFile)
+		.alsoPrintln
 }
+
+operator fun KExpression.invoke(vararg args:KExpression):KPostfixUnaryExpression=
+	when(this)
+	{
+		is KPostfixUnaryExpression->invoke(*args)
+		is KPrimaryExpression->invoke(*args)
+		else->primary(*args)
+	}
 
 val KExpression.primary:KPrimaryExpression
 	get()=when(this)
 	{
 		is KPrimaryExpression->this
+		is KPostfixUnaryExpression->this.primaryExpression
 		else->this.paren
 	}
 
-fun add(x:Int,y:Int):Int=
-	(x+y).let {res->
-		(println(res)).let {p-> res}
-	}
-
-fun tryT(holder:RuleHolder<StlcLexer,StlcParser>,src:String):KotlinAst=
+fun tryT(holder:RuleHolder<StlcLexer,StlcParser>,src:String)=
 	src.let(CharStreams::fromString)
 		.let(::StlcLexer)
 		.let(::CommonTokenStream)
 		.let(::StlcParser)
 		.t()
 		.let(RuleVisitor(holder)::visit)
+		.let {it as KExpression}
 
 fun <T,R> fix(f:((T)->R)->(T)->R):(T)->R=
 	{x-> f(fix(f))(x)}
@@ -336,7 +379,66 @@ val Int.ast get()=KIntegerLiteral(this)
 val KExpression.strExpr:KLineStringExpression
 	get()=KLineStringExpression(this)
 
-fun KPrimaryExpression.call(
+/// CALLS START
+
+fun KPostfixUnaryExpression.invoke(
+	suffix:KCallSuffixInner,
+	args:(Option<KTypeArguments>)=none()
+)=
+	KPostfixUnaryExpression(
+		this.primary,
+		this.suffixes+KCallSuffix(suffix,args)
+	)
+
+fun KPostfixUnaryExpression.invoke(
+	valueArgs:NonEmptyList<KValueArgument>,
+	args:(Option<KTypeArguments>)=None
+)=
+	KPostfixUnaryExpression(
+		this.primary,
+		this.suffixes+KCallSuffix(KValueArguments(valueArgs),args)
+	)
+
+//
+
+operator fun KPostfixUnaryExpression.invoke(args:(Option<KTypeArguments>)=none())=
+	invoke(KValueArguments(emptyList()),args)
+
+operator fun KPostfixUnaryExpression.invoke(vararg valueArgs:KValueArgument):KPostfixUnaryExpression=
+	invoke(valueArgs.toList().toNonEmptyListOrNull() ?: error("No arguments"))
+
+operator fun KPostfixUnaryExpression.invoke(vararg valueArgs:KExpression):KPostfixUnaryExpression=
+	invoke(valueArgs.map {it.valueArg}.toNonEmptyListOrNull() ?: error("No arguments"))
+
+operator fun KPostfixUnaryExpression.invoke(valueArg:KExpression):KPostfixUnaryExpression=
+	invoke(valueArg.valueArg)
+
+operator fun KPostfixUnaryExpression.invoke(valueArgs:NonEmptyList<KValueArgument>):KPostfixUnaryExpression=
+	invoke(valueArgs,None)
+
+operator fun KPostfixUnaryExpression.invoke(suffix:KCallSuffixInner):KPostfixUnaryExpression=
+	invoke(suffix,None)
+////
+
+operator fun KPrimaryExpression.invoke(vararg valueArgs:KValueArgument):KPostfixUnaryExpression=
+	invoke(valueArgs.toList().toNonEmptyListOrNull() ?: error("No arguments"))
+
+operator fun KPrimaryExpression.invoke(vararg valueArgs:KExpression):KPostfixUnaryExpression=
+	invoke(valueArgs.map {it.valueArg}.toNonEmptyListOrNull() ?: error("No arguments"))
+
+infix operator fun KPrimaryExpression.invoke(valueArg:KExpression):KPostfixUnaryExpression=
+	invoke(valueArg.valueArg)
+
+infix fun KPrimaryExpression.invoke(valueArgs:NonEmptyList<KValueArgument>):KPostfixUnaryExpression=
+	invoke(valueArgs,None)
+
+infix fun KPrimaryExpression.invoke(suffix:KCallSuffixInner):KPostfixUnaryExpression=
+	invoke(suffix,None)
+
+///MID
+
+
+operator fun KPrimaryExpression.invoke(
 	suffix:KCallSuffixInner,
 	args:(Option<KTypeArguments>)=none()
 )=
@@ -345,10 +447,10 @@ fun KPrimaryExpression.call(
 		KCallSuffix(suffix,args).list
 	)
 
-fun KPrimaryExpression.call(args:(Option<KTypeArguments>)=none())=
-	call(KValueArguments(emptyList()),args)
+operator fun KPrimaryExpression.invoke(args:(Option<KTypeArguments>)=none())=
+	invoke(KValueArguments(emptyList()),args)
 
-fun KPrimaryExpression.call(
+operator fun KPrimaryExpression.invoke(
 	valueArgs:NonEmptyList<KValueArgument>,
 	args:(Option<KTypeArguments>)=None
 )=
@@ -357,23 +459,7 @@ fun KPrimaryExpression.call(
 		KCallSuffix(KValueArguments(valueArgs),args).list
 	)
 
-fun KPrimaryExpression.call(vararg valueArgs:KValueArgument):KPostfixUnaryExpression=
-	call(valueArgs.toList().toNonEmptyListOrNull() ?: error("No arguments"))
-
-fun KPrimaryExpression.call(vararg valueArgs:KExpression):KPostfixUnaryExpression=
-	call(valueArgs.map {it.valueArg}.toNonEmptyListOrNull() ?: error("No arguments"))
-
-infix fun KPrimaryExpression.call(valueArg:KExpression):KPostfixUnaryExpression=
-	call(valueArg.valueArg)
-
-infix fun KPrimaryExpression.call(valueArgs:NonEmptyList<KValueArgument>):KPostfixUnaryExpression=
-	call(valueArgs,None)
-
-infix fun KPrimaryExpression.call(suffix:KCallSuffixInner):KPostfixUnaryExpression=
-	call(suffix,None)
-
-val KPrimaryExpression.incr:KPostfixUnaryExpression
-	get()=KPostfixUnaryExpression(this,KPostfixUnaryOperator.Incr.list)
+/// CALLS END
 
 fun KExpression.getProp(
 	prop:KNavigationSuffixInner,
@@ -405,11 +491,11 @@ fun KSimpleIdentifier.simpleGeneric(projection:KTypeProjection)=
 fun KSimpleIdentifier.simpleGeneric(type:KType)=simpleGeneric(type.proj)
 fun KSimpleIdentifier.simpleGeneric(type:String)=simpleGeneric(type.type)
 
-val KSimpleUserType.userType get()=KUserType(this.nel(),0)
+val KSimpleUserType.userType get()=KUserType(nel(),0)
 
-val KSimpleUserType.anno get()=anno(KUserType(this.nel(),0))
+val KSimpleUserType.anno get()=anno(KUserType(nel(),0))
 
-val KConcreteTypeProjection.args get()=KTypeArguments(this.nel())
+val KConcreteTypeProjection.args get()=KTypeArguments(nel())
 
 val KTypeInner.type get()=KType(emptyList(),this)
 
